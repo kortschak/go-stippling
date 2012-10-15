@@ -1,5 +1,5 @@
 // Example application for voronoi/density package other 
-// than voronoi diagrams. WDMap is a specialised density 
+// than voronoi diagrams. dipmap is a specialised density 
 // map for creating dipoles, which can then be further
 // split into dipoles. After N generations, it has
 // divided a source image into 2^N cells.
@@ -9,7 +9,6 @@ import (
 	"code.google.com/p/go-stippling/density"
 	"flag"
 	"image"
-	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"log"
@@ -26,8 +25,8 @@ func main() {
 	var outputExt = flag.Uint("e", 1, "\t\tOutput (e)xtension type:\n\t\t\t 1 \t png (default)\n\t\t\t 2 \t jpg")
 	var jpgQuality = flag.Int("q", 90, "\t\tJPG output (q)uality")
 	var generations = flag.Uint("g", 3, "\t\tNumber of (g)enerations")
-	var mono = flag.Bool("m", true, "\t\t(m)onochrome or coloured output")
-	var saveAll = flag.Bool("s", true, "\t\t(s)ave all generations - only save last generation if false")
+	var mono = flag.Bool("m", true, "\t\t(m)onochrome (default) or coloured output")
+	var saveAll = flag.Bool("s", true, "\t\t(s)ave all generations (default) - only save last generation if false")
 	var numCores = flag.Int("c", 1, "\t\tMax number of (c)ores to be used.\n\t\t\tUse all available cores if less or equal to zero")
 	flag.Parse()
 
@@ -63,14 +62,15 @@ func main() {
 	toFile := func(i image.Image, g uint) {
 
 		numSlice := []string{}
-		for d := uint(1000); d > 1; d /= 10 {
-			if g%d == g {
-				numSlice = append(numSlice, "0")
-			}
+
+		// I highly doubt anyone would try to go beyond 99 generations,
+		// as that would generate over 2^99 cells.
+		if g%10 == g {
+			numSlice = append(numSlice, "0")
 		}
 		numSlice = append(numSlice, strconv.Itoa(int(g)))
 		splitName[1] = strings.Join(numSlice, "")
-		// The file to output wdmap as an image to
+
 		output, err := os.Create(strings.Join(splitName, "."))
 		if err != nil {
 			log.Fatal(err)
@@ -86,7 +86,7 @@ func main() {
 	}
 
 	if *mono {
-		wdm := wdmap.NewWD(img, density.AvgDensity, density.NegAvgDensity, uint(1<<(*generations)))
+		wdm := NewWD(img, density.AvgDensity, density.NegAvgDensity, uint(1<<(*generations)))
 		for i := uint(0); uint(i) < *generations; i++ {
 			if *saveAll {
 				wdm.Render(nc)
@@ -97,7 +97,7 @@ func main() {
 		wdm.Render(nc)
 		toFile(wdm, *generations)
 	} else {
-		cwdm := wdmap.NewColWD(img, uint(1<<(*generations)))
+		cwdm := NewColWD(img, uint(1<<(*generations)))
 		for i := uint(0); uint(i) < *generations; i++ {
 			if *saveAll {
 				cwdm.Render(nc)

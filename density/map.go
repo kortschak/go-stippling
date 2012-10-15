@@ -1,8 +1,8 @@
 // Package density implements functions to map pixels in an image 
 // to associated density values, and store them in a Map (not to
 // be confused with the built-in type). It is mostly an adaptation
-// of the code found in the image package, and still uses Point 
-// and Rect from that package.
+// of the code found in the standard library's image package, and
+// still uses Point and Rect from that package.
 //
 // Density values of a pixel as defined by the density model are 
 // stored as uint16 values. Maps implement the Image interface, as
@@ -13,10 +13,11 @@
 //
 // SumX, SumY and DSum are special density Maps that store summed 
 // density values values over the X-axis, the Y-axis, and both X 
-// and Y axes respectively. When summing over a large area of the
-// same Map repeatedly this can be faster, as it can greatly
-// reduce the number of memory lookups. Take note that this also
-// greatly depends on things like branch prediction.
+// and Y axes respectively. When an algorithm requires summing
+// the values over a large area of a Map these maps can in theory
+// do this faster, as it can greatly reduce the number of memory
+// lookups. Take note that this also greatly depends on things
+// like branch prediction.
 package density
 
 import (
@@ -85,14 +86,15 @@ func (d *Map) Set(x, y int, v uint16) {
 }
 
 // InitSet(x, y) is almost identical to Set(x, y), but assumes the
-// previous value at (x,y) was 0. Use it to speed up constructors.
+// previous value at (x,y) was 0. A Map internally saves the total
+// mass and the weighed x and y, and by making this assumption
+// those values are easier and faster to update.
+// Use it to speed up constructors. 
 func (d *Map) InitSet(x, y int, v uint16) {
 	if !(image.Point{x, y}.In(d.Rect)) {
 		return
 	}
-	i := d.DVOffSet(x, y)
-
-	d.Values[i] = v
+	d.Values[d.DVOffSet(x, y)] = v
 
 	// We update mass, wx and wy. Since the original values
 	// were zero, we can immediately add the new value.
@@ -217,6 +219,119 @@ func (d *Map) SubMap(r image.Rectangle) (s *Map) {
 		mass:   sm,
 		wx:     swx,
 		wy:     swy,
+	}
+	return
+}
+
+// Intersect returns a new Map representing the portion of the Map d visible 
+// as alpha-masked by density map m. Returns nil if intersection is empty.
+func (d *Map) Intersect(m *Map) (n *Map) {
+	r := m.Rect.Intersect(d.Rect)
+	// If r1 and r2 are Rectangles, r1.Intersect(r2) is not guaranteed to be inside
+	// either r1 or r2 if the intersection is empty. Without explicitly checking for
+	// this, the Values[i:] expression below can panic.
+	if r.Empty() {
+		return
+	}
+
+	// Recalculate the mass, weighed x and weighed y
+	var nm, nwx, nwy uint64
+	stride := r.Dx()
+
+	dv := d.Values[d.DVOffSet(r.Min.X, r.Min.Y):]
+	mv := m.Values[m.DVOffSet(r.Min.X, r.Min.Y):]
+	nv := make([]uint16, stride*r.Dy())
+
+	for y := 0; y < r.Dy(); y++ {
+		for x := 0; x < stride; x++ {
+			nv[x+y*stride] = uint16((uint32(dv[x+y*d.Stride])*uint32(mv[x+y*m.Stride]) + 0x7FFF) / 0xFFFF)
+
+			if m := int(nv[x+y*stride]); m != 0 {
+				nm += uint64(m)
+				nwx += uint64(m * x)
+				nwy += uint64(m * y)
+			}
+		}
+	}
+
+	n = &Map{
+		Values: nv,
+		Stride: stride,
+		Rect:   r,
+		mass:   nm,
+		wx:     nwx,
+		wy:     nwy,
+	}
+	return
+}
+
+// CompactIntersect returns a new Map representing the portion of the Map
+// d visible as alpha-masked by density map m. Compacts to non-zero values.
+// Returns nil if intersection is empty.
+func (d *Map) CompactIntersect(m *Map) (n *Map) {
+	r := m.Rect.Intersect(d.Rect)
+	// If r1 and r2 are Rectangles, r1.Intersect(r2) is not guaranteed to be inside
+	// either r1 or r2 if the intersection is empty. Without explicitly checking for
+	// this, the Values[i:] expression below can panic.
+	if r.Empty() {
+		return
+	}
+
+	// Recalculate the mass, weighed x and weighed y
+
+	var nm, nwx, nwy uint64
+	stride := r.Dx()
+
+	dv := d.Values[d.DVOffSet(r.Min.X, r.Min.Y):]
+	mv := m.Values[m.DVOffSet(r.Min.X, r.Min.Y):]
+	nv := make([]uint16, stride*r.Dy())
+
+	// In order to find the lowest and highest X and Y with non-zero
+	// values, we initialise both at the opposite end.
+	minX := stride
+	minY := r.Dy()
+	maxX := 0
+	maxY := 0
+
+	for y := 0; y < r.Dy(); y++ {
+		for x := 0; x < stride; x++ {
+			nv[x+y*stride] = uint16((uint32(dv[x+y*d.Stride])*uint32(mv[x+y*m.Stride]) + 0x7FFF) / 0xFFFF)
+			m := int(nv[x+y*stride])
+			if m != 0 {
+				if x < minX {
+					minX = x
+				}
+				if x > maxX {
+					maxX = x
+				}
+				if y < minY {
+					minY = y
+				}
+				if y > maxY {
+					maxY = y
+				}
+				nm += uint64(m)
+				nwx += uint64(m * x)
+				nwy += uint64(m * y)
+			}
+		}
+	}
+
+	if nm == 0 {
+		return
+	}
+
+	r.Max.X = r.Min.X + maxX + 1
+	r.Max.Y = r.Min.Y + maxY + 1
+	r.Min.X += minX
+	r.Min.Y += minY
+	n = &Map{
+		Values: nv[(minY*stride + minX):],
+		Stride: stride,
+		Rect:   r,
+		mass:   nm,
+		wx:     nwx,
+		wy:     nwy,
 	}
 	return
 }
