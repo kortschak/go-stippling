@@ -301,14 +301,14 @@ func (d *Map) CompactIntersect(m *Map) (n *Map) {
 				if x < minX {
 					minX = x
 				}
-				if x > maxX {
-					maxX = x
+				if x >= maxX {
+					maxX = x + 1
 				}
 				if y < minY {
 					minY = y
 				}
-				if y > maxY {
-					maxY = y
+				if y >= maxY {
+					maxY = y + 1
 				}
 				nm += uint64(m)
 				nwx += uint64(m * x)
@@ -317,12 +317,24 @@ func (d *Map) CompactIntersect(m *Map) (n *Map) {
 		}
 	}
 
-	if nm == 0 {
+	if nm == 0 { // Return an empty map
+		r.Max.X = 1
+		r.Max.Y = 1
+		r.Min.X = 0
+		r.Min.Y = 0
+		n = &Map{
+			Values: nil,
+			Stride: 0,
+			Rect:   r,
+			mass:   nm,
+			wx:     nwx,
+			wy:     nwy,
+		}
 		return
 	}
 
-	r.Max.X = r.Min.X + maxX + 1
-	r.Max.Y = r.Min.Y + maxY + 1
+	r.Max.X = r.Min.X + maxX
+	r.Max.Y = r.Min.Y + maxY
 	r.Min.X += minX
 	r.Min.Y += minY
 	n = &Map{
