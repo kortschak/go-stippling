@@ -80,38 +80,38 @@ type DMap struct {
 	rect    image.Rectangle
 }
 
-func (wd *DMap) Copy(a *DMap) {
-	copy(wd.dipoles, a.dipoles)
-	copy(wd.render, a.render)
-	wd.rect = a.rect
+func (dm *DMap) Copy(a *DMap) {
+	copy(dm.dipoles, a.dipoles)
+	copy(dm.render, a.render)
+	dm.rect = a.rect
 }
 
-func (wd *DMap) ColorModel() color.Model {
+func (dm *DMap) ColorModel() color.Model {
 	return color.Gray16Model
 }
 
-func (wd *DMap) Bounds() image.Rectangle {
-	return wd.rect
+func (dm *DMap) Bounds() image.Rectangle {
+	return dm.rect
 }
 
 //Render dipoles using n goroutines
-func (wd *DMap) Render(n int) {
+func (dm *DMap) Render(n int) {
 	if n <= 0 {
 		n = 1
 	}
-	if len(wd.dipoles) < n {
-		n = len(wd.dipoles)
+	if len(dm.dipoles) < n {
+		n = len(dm.dipoles)
 	}
 
 	nrender := make([][]uint64, n)
 
 	for i := 0; i < n; i++ {
-		nrender[i] = make([]uint64, len(wd.render))
+		nrender[i] = make([]uint64, len(dm.render))
 	}
 
-	x0 := wd.Bounds().Min.X
-	y0 := wd.Bounds().Min.Y
-	Stride := wd.Bounds().Dx()
+	x0 := dm.Bounds().Min.X
+	y0 := dm.Bounds().Min.Y
+	Stride := dm.Bounds().Dx()
 	ch := make(chan []uint64)
 
 	renderf := func(r []uint64, c cell) {
@@ -126,14 +126,14 @@ func (wd *DMap) Render(n int) {
 
 	// Do separate renderings of dipoles
 	for i := 0; i < n; i++ {
-		go renderf(nrender[i], wd.dipoles[i].N)
+		go renderf(nrender[i], dm.dipoles[i].N)
 	}
 
 	// Whenever a goroutine finished rendering a dipole,
 	// start again with a new dipole, until all dipoles
 	// have been rendered.
-	for i := n; i < len(wd.dipoles); i++ {
-		go renderf(<-ch, wd.dipoles[i].N)
+	for i := n; i < len(dm.dipoles); i++ {
+		go renderf(<-ch, dm.dipoles[i].N)
 	}
 
 	for i := 0; i < n; i++ {
@@ -149,48 +149,48 @@ func (wd *DMap) Render(n int) {
 		}
 	}
 
-	for i := 0; i < len(wd.render); i++ {
-		wd.render[i] = uint16(r0[i])
+	for i := 0; i < len(dm.render); i++ {
+		dm.render[i] = uint16(r0[i])
 	}
 }
 
-func (wd *DMap) ValueAt(x, y int) (v uint16) {
-	if r := wd.Bounds(); !(image.Point{x, y}.In(r)) {
+func (dm *DMap) ValueAt(x, y int) (v uint16) {
+	if r := dm.Bounds(); !(image.Point{x, y}.In(r)) {
 		return
 	} else {
-		v = wd.render[x-r.Min.X+(y-r.Min.Y)*r.Dx()]
+		v = dm.render[x-r.Min.X+(y-r.Min.Y)*r.Dx()]
 	}
 	return
 }
 
-func (wd *DMap) At(x, y int) color.Color {
-	return color.Gray16{wd.ValueAt(x, y)}
+func (dm *DMap) At(x, y int) color.Color {
+	return color.Gray16{dm.ValueAt(x, y)}
 }
 
 // Splits the dipoles in DMap in two, using n goroutines
-func (wd *DMap) SplitCells(n int) {
+func (dm *DMap) SplitCells(n int) {
 	if n <= 0 {
 		n = 1
 	}
 
-	l := len(wd.dipoles)
+	l := len(dm.dipoles)
 	if l < n {
 		n = l
 	}
 
 	ch := make(chan *dipole)
 	for i := 0; i < n; i++ {
-		go wd.makeMasks(i, ch)
+		go dm.makeMasks(i, ch)
 	}
 	for i := n; i < l; i++ {
 		if c := <-ch; c != nil {
-			wd.dipoles = append(wd.dipoles, *c)
+			dm.dipoles = append(dm.dipoles, *c)
 		}
-		go wd.makeMasks(i, ch)
+		go dm.makeMasks(i, ch)
 	}
 	for i := 0; i < n; i++ {
 		if c := <-ch; c != nil {
-			wd.dipoles = append(wd.dipoles, *c)
+			dm.dipoles = append(dm.dipoles, *c)
 		}
 	}
 	// Try to avoid the heap from growing too much, because of
@@ -198,9 +198,9 @@ func (wd *DMap) SplitCells(n int) {
 	runtime.GC()
 }
 
-func (wd *DMap) makeMasks(idx int, ch chan *dipole) {
+func (dm *DMap) makeMasks(idx int, ch chan *dipole) {
 
-	Result := wd.dipoles[idx].N.Result
+	Result := dm.dipoles[idx].N.Result
 	//Too small to divide further
 	if Result == nil {
 		ch <- nil
@@ -214,7 +214,7 @@ func (wd *DMap) makeMasks(idx int, ch chan *dipole) {
 
 	r := Result.Bounds()
 	x0, y0 := Result.CM()
-	x1, y1 := wd.dipoles[idx].S.Result.CM()
+	x1, y1 := dm.dipoles[idx].S.Result.CM()
 
 	cx := (x0 + x1) / 2
 	cy := (y0 + y1) / 2
@@ -269,8 +269,8 @@ func (wd *DMap) makeMasks(idx int, ch chan *dipole) {
 	intersectf := func(m1, m2 *density.Map) {
 		dch <- m1.CompactIntersect(m2)
 	}
-	go intersectf(ma, wd.dipoles[idx].N.Mask)
-	go intersectf(mb, wd.dipoles[idx].N.Mask)
+	go intersectf(ma, dm.dipoles[idx].N.Mask)
+	go intersectf(mb, dm.dipoles[idx].N.Mask)
 	nm1 := <-dch
 	nm2 := <-dch
 
@@ -282,16 +282,16 @@ func (wd *DMap) makeMasks(idx int, ch chan *dipole) {
 		ch <- nil
 		return
 	}
-	wd.dipoles[idx].setMask(nm1)
-	ch <- newDipole(wd.dipoles[idx].N.Source, wd.dipoles[idx].S.Source, nm2)
+	dm.dipoles[idx].setMask(nm1)
+	ch <- newDipole(dm.dipoles[idx].N.Source, dm.dipoles[idx].S.Source, nm2)
 }
 
-func NewWD(i image.Image, nd, sd density.Model, c uint) (wd *DMap) {
+func NewDMap(i image.Image, nd, sd density.Model, c uint) (dm *DMap) {
 	if c == 0 {
 		c = 1
 	}
 	r := i.Bounds()
-	wd = &DMap{
+	dm = &DMap{
 		dipoles: make([]dipole, 1, c),
 		render:  make([]uint16, r.Dx()*r.Dy()),
 		rect:    r,
@@ -306,7 +306,7 @@ func NewWD(i image.Image, nd, sd density.Model, c uint) (wd *DMap) {
 		}
 	}
 
-	wd.dipoles[0] = *newDipole(n, s, m)
+	dm.dipoles[0] = *newDipole(n, s, m)
 	return
 }
 
@@ -314,14 +314,14 @@ type ColDMap struct {
 	R, G, B *DMap
 }
 
-func NewColWD(i image.Image, c uint) (cwd *ColDMap) {
+func NewColDMap(i image.Image, c uint) (cdm *ColDMap) {
 	if c == 0 {
 		c = 1
 	}
-	cwd = &ColDMap{
-		R: NewWD(i, density.RedDensity, density.NegRedDensity, c),
-		G: NewWD(i, density.GreenDensity, density.NegGreenDensity, c),
-		B: NewWD(i, density.BlueDensity, density.NegBlueDensity, c),
+	cdm = &ColDMap{
+		R: NewDMap(i, density.RedDensity, density.NegRedDensity, c),
+		G: NewDMap(i, density.GreenDensity, density.NegGreenDensity, c),
+		B: NewDMap(i, density.BlueDensity, density.NegBlueDensity, c),
 	}
 	return
 }
