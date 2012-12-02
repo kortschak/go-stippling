@@ -3,6 +3,9 @@
 // map for creating dipoles, which can then be further
 // split into dipoles. After N generations, it has
 // divided a source image into 2^N cells.
+// wdipmap is a further refinement using weighted
+// voronoi cells instead of regular voronoi cells.
+// It produces subtly better visual fidelity.
 package main
 
 import (

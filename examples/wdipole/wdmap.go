@@ -22,16 +22,6 @@ func (c *cell) changedMaps() {
 }
 
 func (c *cell) ValueAt(x, y int) uint64 {
-	/*
-		//return 0x8888
-		v := (c.Result.Mass() * 0xFFFF * c.Mask.ValueAt(x, y)) / c.Mask.Mass()
-		if v == 0 {
-			fmt.Println(c.Result.Mass())
-			fmt.Println(c.Mask.ValueAt(x, y))
-			fmt.Println(c.Mask.Mass())
-			panic("blargh")
-		}
-	*/
 	return (c.Result.Mass() * c.Mask.ValueAt(x, y)) / c.Mask.Mass()
 }
 
@@ -184,6 +174,7 @@ func (wd *WDMap) SplitCells(n int) {
 			wd.dipoles = append(wd.dipoles, *c)
 		}
 	}
+
 	// Try to avoid the heap from growing too much, because of
 	// GC issues on 32 bit systems (bit cargo-cultish, I know)
 	runtime.GC()
@@ -302,7 +293,7 @@ func NewWD(i image.Image, nd, sd density.Model, c uint) (wd *WDMap) {
 		}
 	}
 
-	wd.dipoles[0] = *newDipole(n, s, m)
+	wd.dipoles[0] = *newDipole(&n, &s, m)
 	return
 }
 

@@ -4,20 +4,32 @@
 // of the code found in the standard library's image package, and
 // still uses Point and Rect from that package.
 //
-// Density values of a pixel as defined by the density model are 
-// stored as uint16 values. Maps implement the Image interface, as
-// Gray16 images (obviously).
-//
 // Although written for making weighted voronoi maps based on 
 // images, it probably can be used more widely than that.
+//
+// Density values of a pixel as defined by the density model are 
+// stored as uint16 values. Maps implement the Image interface, as
+// Gray16 images. Note that it's trivial to make a struct that wraps
+// density maps as different colour channels (see examples).
 //
 // SumX, SumY and DSum are special density Maps that store summed 
 // density values values over the X-axis, the Y-axis, and both X 
 // and Y axes respectively. When an algorithm requires summing
-// the values over a large area of a Map these maps can in theory
-// do this faster, as it can greatly reduce the number of memory
-// lookups. Take note that this also greatly depends on things
-// like branch prediction.
+// the values over a large area of a Map, these maps can in theory
+// do this faster by reducing the number of memory lookups needed.
+// Take note that potential speed benefits also greatly depend on
+// things like branch prediction.
+//
+// As these sums most likely overflow 16 bit values, they are
+// stored internally as uint64. They still produce the same
+// Gray16 image output though, automatically correcting away
+// their summed values for the image interface.
+//
+// SumMask, SumXMask and SumYMask are specialised to use the 
+// precomputation benefits of the Sum, SumX and SumY types. By 
+// storing only the coordinates that one wants to sum over, these
+// masks can be much smaller. This is especially true for large
+// homogenous masks.
 package density
 
 import (
@@ -156,7 +168,7 @@ func (d *Map) WY() uint64 {
 }
 
 // AvgDens returns the average density of the Map.
-func (d *Map) AvgDens() (v float64) {
+func (d *Map) AvgDens() float64 {
 	return float64(d.mass) / float64(d.Rect.Dx()*d.Rect.Dy())
 }
 
@@ -172,7 +184,7 @@ func NewMap(r image.Rectangle) (d *Map) {
 
 // Determines the density values of image.Image according to the density 
 // model it is given, and returns the results as a new Map.
-func MapFrom(i image.Image, d Model) *Map {
+func MapFrom(i image.Image, d Model) Map {
 	r := i.Bounds()
 	w, h := r.Dx(), r.Dy()
 	dv := make([]uint16, w*h)
@@ -182,18 +194,18 @@ func MapFrom(i image.Image, d Model) *Map {
 			dm.InitSet(x, y, d.Convert(i.At(x, y)))
 		}
 	}
-	return &dm
+	return dm
 }
 
 // SubMap returns a Map representing the portion of the Map d visible 
 // through r. The returned map shares values with the original map.
-func (d *Map) SubMap(r image.Rectangle) (s *Map) {
+func (d *Map) SubMap(r image.Rectangle) *Map {
 	r = r.Intersect(d.Rect)
 	// If r1 and r2 are Rectangles, r1.Intersect(r2) is not guaranteed to be inside
 	// either r1 or r2 if the intersection is empty. Without explicitly checking for
 	// this, the Values[i:] expression below can panic.
 	if r.Empty() {
-		return
+		return nil
 	}
 
 	i := d.DVOffSet(r.Min.X, r.Min.Y)
@@ -212,7 +224,7 @@ func (d *Map) SubMap(r image.Rectangle) (s *Map) {
 		}
 	}
 
-	s = &Map{
+	return &Map{
 		Values: sv,
 		Stride: d.Stride,
 		Rect:   r,
@@ -220,18 +232,17 @@ func (d *Map) SubMap(r image.Rectangle) (s *Map) {
 		wx:     swx,
 		wy:     swy,
 	}
-	return
 }
 
 // Intersect returns a new Map representing the portion of the Map d visible 
 // as alpha-masked by density map m. Returns nil if intersection is empty.
-func (d *Map) Intersect(m *Map) (n *Map) {
+func (d *Map) Intersect(m *Map) *Map {
 	r := m.Rect.Intersect(d.Rect)
 	// If r1 and r2 are Rectangles, r1.Intersect(r2) is not guaranteed to be inside
 	// either r1 or r2 if the intersection is empty. Without explicitly checking for
 	// this, the Values[i:] expression below can panic.
 	if r.Empty() {
-		return
+		return nil
 	}
 
 	// Recalculate the mass, weighed x and weighed y
@@ -254,7 +265,7 @@ func (d *Map) Intersect(m *Map) (n *Map) {
 		}
 	}
 
-	n = &Map{
+	return &Map{
 		Values: nv,
 		Stride: stride,
 		Rect:   r,
@@ -262,19 +273,18 @@ func (d *Map) Intersect(m *Map) (n *Map) {
 		wx:     nwx,
 		wy:     nwy,
 	}
-	return
 }
 
 // CompactIntersect returns a new Map representing the portion of the Map
 // d visible as alpha-masked by density map m. Compacts to non-zero values.
 // Returns nil if intersection is empty.
-func (d *Map) CompactIntersect(m *Map) (n *Map) {
+func (d *Map) CompactIntersect(m *Map) *Map {
 	r := m.Rect.Intersect(d.Rect)
 	// If r1 and r2 are Rectangles, r1.Intersect(r2) is not guaranteed to be inside
 	// either r1 or r2 if the intersection is empty. Without explicitly checking for
 	// this, the Values[i:] expression below can panic.
 	if r.Empty() {
-		return
+		return nil
 	}
 
 	// Recalculate the mass, weighed x and weighed y
@@ -318,26 +328,14 @@ func (d *Map) CompactIntersect(m *Map) (n *Map) {
 	}
 
 	if nm == 0 { // Return an empty map
-		r.Max.X = 1
-		r.Max.Y = 1
-		r.Min.X = 0
-		r.Min.Y = 0
-		n = &Map{
-			Values: nil,
-			Stride: 0,
-			Rect:   r,
-			mass:   nm,
-			wx:     nwx,
-			wy:     nwy,
-		}
-		return
+		return nil
 	}
 
 	r.Max.X = r.Min.X + maxX
 	r.Max.Y = r.Min.Y + maxY
 	r.Min.X += minX
 	r.Min.Y += minY
-	n = &Map{
+	return &Map{
 		Values: nv[(minY*stride + minX):],
 		Stride: stride,
 		Rect:   r,
@@ -345,5 +343,4 @@ func (d *Map) CompactIntersect(m *Map) (n *Map) {
 		wx:     nwx,
 		wy:     nwy,
 	}
-	return
 }
