@@ -6,7 +6,7 @@ package main
 import (
 	"code.google.com/p/go-stippling/density"
 	"flag"
-	"fmt"
+	//"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -14,6 +14,10 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+)
+
+const (
+	maxGoRoutines = 16
 )
 
 func main() {
@@ -24,6 +28,7 @@ func main() {
 	var generations = flag.Uint("g", 3, "\t\tNumber of (g)enerations")
 	var saveAll = flag.Bool("s", true, "\t\t(s)ave all generations (default) - only save last generation if false")
 	var numCores = flag.Int("c", 1, "\t\tMax number of (c)ores to be used.\n\t\t\tUse all available cores if less or equal to zero")
+	var mono = flag.Bool("mono", true, "\t\tMonochrome or colour output")
 	flag.Parse()
 	var inputfiles = flag.Args()
 
@@ -87,17 +92,31 @@ func main() {
 			}
 		}
 
-		qm := QMFrom(img)
-		imgout := image.NewGray16(qm.ds.Rect)
-		for i := uint(0); uint(i) < *generations; i++ {
-			if *saveAll {
-				qm.To(imgout)
-				toFile(imgout, name(i))
+		if *mono {
+			qm := QMFrom(img)
+			imgout := image.NewGray16(qm.ds.Rect)
+			for i := uint(0); uint(i) < *generations; i++ {
+				if *saveAll {
+					qm.To(imgout)
+					toFile(imgout, name(i))
+				}
+				qm.Split()
 			}
-			qm.Split()
+			qm.To(imgout)
+			toFile(imgout, name(*generations))
+		} else {
+			cqm := CQMFrom(img)
+			imgout := image.NewRGBA(cqm.R.ds.Rect)
+			for i := uint(0); uint(i) < *generations; i++ {
+				if *saveAll {
+					cqm.To(imgout)
+					toFile(imgout, name(i))
+				}
+				cqm.Split()
+			}
+			cqm.To(imgout)
+			toFile(imgout, name(*generations))
 		}
-		qm.To(imgout)
-		toFile(imgout, name(*generations))
 	}
 
 	for fileNum, fileName = range inputfiles {
@@ -113,7 +132,7 @@ type cell struct {
 }
 
 func (c *cell) Mass() uint64 {
-	return c.Source.AreaSum(c.r.Min.X, c.r.Min.Y, c.r.Max.X, c.r.Max.Y)
+	return c.Source.AreaSum(c.r)
 }
 
 func (c *cell) CalcC() {
@@ -147,12 +166,12 @@ func (c *cell) Split() (child *cell) {
 					xmax = child.r.Max.X
 					child.r.Max.X = (child.r.Max.X + xmin) / 2
 				} else {
-					c.r.Min.X = child.r.Max.X + 1
+					c.r.Min.X = child.r.Max.X
 					return
 				}
 				//fmt.Printf("i: %v \t x: %v\n", i, child.r.Max.X)
 			} else {
-				c.r.Min.X = child.r.Max.X + 1
+				c.r.Min.X = child.r.Max.X
 				return
 			}
 		}
@@ -169,12 +188,12 @@ func (c *cell) Split() (child *cell) {
 					ymax = child.r.Max.Y
 					child.r.Max.Y = (child.r.Max.Y + ymin) / 2
 				} else {
-					c.r.Min.Y = child.r.Max.Y + 1
+					c.r.Min.Y = child.r.Max.Y
 					return
 				}
 				//fmt.Printf("i: %v \t y: %v\n", i, child.r.Max.Y)
 			} else {
-				c.r.Min.Y = child.r.Max.Y + 1
+				c.r.Min.Y = child.r.Max.Y
 				return
 			}
 		}
@@ -184,7 +203,7 @@ func (c *cell) Split() (child *cell) {
 }
 
 type quartermap struct {
-	ds    density.DSum
+	ds    *density.DSum
 	cells []*cell
 }
 
@@ -192,29 +211,54 @@ func (qm *quartermap) Split() {
 	qm.cells = append(qm.cells, qm.cells...)
 	oldcells := qm.cells[:len(qm.cells)/2]
 	newcells := qm.cells[len(qm.cells)/2:]
+	waitchan := make(chan int, maxGoRoutines)
+
+	for i := 0; i < maxGoRoutines; i++ {
+		waitchan <- 1
+	}
 	for i, c := range oldcells {
-		newcells[i] = c.Split()
-		newcells[i].CalcC()
-		c.CalcC()
+		_ = <-waitchan
+		go func(i int, c *cell) {
+			newcells[i] = c.Split()
+			waitchan <- 1
+		}(i, c)
 	}
-	for i, v := range qm.cells {
-		v.CalcC()
-		fmt.Printf("QMSplit %v\t Mass: %v\t C: %v\t W: %v-%v\t H: %v-%v\n", i, v.Mass(), v.c, v.r.Min.X, v.r.Max.X, v.r.Min.Y, v.r.Max.Y)
+	for i := 0; i < maxGoRoutines; i++ {
+		_ = <-waitchan
 	}
-	println()
+	/*
+		for i, v := range qm.cells {
+			v.CalcC()
+			fmt.Printf("QMSplit %v\t Mass: %v\t C: %v\t W: %v-%v\t H: %v-%v\n", i, v.Mass(), v.c, v.r.Min.X, v.r.Max.X, v.r.Min.Y, v.r.Max.Y)
+		}
+		println()
+	*/
 	return
 }
 
 func (qm *quartermap) To(img *image.Gray16) {
+	waitchan := make(chan int, maxGoRoutines)
+	for i := 0; i < maxGoRoutines; i++ {
+		waitchan <- 1
+	}
 	for _, c := range qm.cells {
-		c.CalcC()
-		for y := c.r.Min.Y; y < c.r.Max.Y; y++ {
-			for x := c.r.Min.X; x < c.r.Max.X; x++ {
-				i := img.PixOffset(x, y)
-				img.Pix[i+0] = uint8(c.c >> 8)
-				img.Pix[i+1] = uint8(c.c)
+		// since none of the pixels of the cells overlap, no worries about data races, right?
+		_ = <-waitchan
+		go func(c *cell) {
+			c.CalcC()
+			for y := c.r.Min.Y; y < c.r.Max.Y; y++ {
+				for x := c.r.Min.X; x < c.r.Max.X; x++ {
+					i := img.PixOffset(x, y)
+					img.Pix[i+0] = uint8(c.c >> 8)
+					img.Pix[i+1] = uint8(c.c)
+				}
 			}
-		}
+			waitchan <- 1
+		}(c)
+
+	}
+	for i := 0; i < maxGoRoutines; i++ {
+		_ = <-waitchan
 	}
 	return
 }
@@ -223,8 +267,91 @@ func QMFrom(img image.Image) (qm *quartermap) {
 	qm = new(quartermap)
 	qm.ds = density.DSumFrom(img, density.AvgDensity)
 	qm.cells = []*cell{&cell{
-		Source: &qm.ds,
+		Source: qm.ds,
 		r:      qm.ds.Rect,
 		c:      0}}
+	return
+}
+
+type colorquartermap struct {
+	R, G, B quartermap
+}
+
+func (cqm *colorquartermap) Split() {
+	cqm.R.Split()
+	cqm.G.Split()
+	cqm.B.Split()
+}
+
+func CQMFrom(img image.Image) (cqm *colorquartermap) {
+	cqm = new(colorquartermap)
+	cqm.R.ds = density.DSumFrom(img, density.RedDensity)
+	cqm.G.ds = density.DSumFrom(img, density.GreenDensity)
+	cqm.B.ds = density.DSumFrom(img, density.BlueDensity)
+
+	cqm.R.cells = []*cell{&cell{
+		Source: cqm.R.ds,
+		r:      cqm.R.ds.Rect,
+		c:      0}}
+	cqm.G.cells = []*cell{&cell{
+		Source: cqm.G.ds,
+		r:      cqm.G.ds.Rect,
+		c:      0}}
+	cqm.B.cells = []*cell{&cell{
+		Source: cqm.B.ds,
+		r:      cqm.B.ds.Rect,
+		c:      0}}
+	return
+}
+
+func (cqm *colorquartermap) To(img *image.RGBA) {
+	waitchan := make(chan int, maxGoRoutines)
+	for i := 0; i < maxGoRoutines; i++ {
+		waitchan <- 1
+	}
+	for _, c := range cqm.R.cells {
+		_ = <-waitchan
+		go func(c *cell) {
+			c.CalcC()
+			for y := c.r.Min.Y; y < c.r.Max.Y; y++ {
+				for x := c.r.Min.X; x < c.r.Max.X; x++ {
+					img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4] = uint8(c.c >> 8)
+				}
+			}
+			waitchan <- 1
+		}(c)
+	}
+	for _, c := range cqm.G.cells {
+		_ = <-waitchan
+		go func(c *cell) {
+			c.CalcC()
+			for y := c.r.Min.Y; y < c.r.Max.Y; y++ {
+				for x := c.r.Min.X; x < c.r.Max.X; x++ {
+					img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4+1] = uint8(c.c >> 8)
+				}
+			}
+			waitchan <- 1
+		}(c)
+	}
+	for _, c := range cqm.B.cells {
+		_ = <-waitchan
+		go func(c *cell) {
+			c.CalcC()
+			for y := c.r.Min.Y; y < c.r.Max.Y; y++ {
+				for x := c.r.Min.X; x < c.r.Max.X; x++ {
+					img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4+2] = uint8(c.c >> 8)
+				}
+			}
+			waitchan <- 1
+		}(c)
+	}
+	for y := img.Rect.Min.Y; y < img.Rect.Max.Y; y++ {
+		for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
+			img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4+3] = 0xFF
+		}
+	}
+	for i := 0; i < maxGoRoutines; i++ {
+		_ = <-waitchan
+	}
 	return
 }
