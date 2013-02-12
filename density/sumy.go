@@ -10,14 +10,12 @@ import (
 // including (x, y), as converted by the density function.
 // At(x, y) produces the same colour output as a regular map.
 //
-// For cache purposes, the data is internally stored as a transposed
-// array, that is: (x, y) = Values[x*height + y].
+// For cache purposes, the data is stored as a transposed array,
+// that is: SumY.ValuAt(x, y) = SumY.Values[x*height + y].
 type SumY struct {
 	// Values holds the map's density values. The value at (x, y)
-	// starts at Values[(y-Rect.Min.Y)*Stride + (x-Rect.Min.X)*1].
+	// starts at Values[(x-Rect.Min.X)*Stride + (y-Rect.Min.Y)*1].
 	Values []uint64
-	// Stride is the Values' stride between
-	// vertically adjacent pixels.
 	Stride int
 	// Rect is the Map's bounds.
 	Rect image.Rectangle
@@ -46,8 +44,7 @@ func (d *SumY) At(x, y int) color.Color {
 
 func (d *SumY) ValueAt(x, y int) (v uint64) {
 	if (image.Point{x, y}.In(d.Rect)) {
-		i := d.DVOffSet(x, y)
-		v = d.Values[i]
+		v = d.Values[(x-d.Rect.Min.X)*d.Stride+(y-d.Rect.Min.Y)]
 	}
 	return
 }
@@ -58,41 +55,35 @@ func (d *SumY) Set(x, y int, v uint16) {
 	}
 	// First, convert to the delta of the value at (x,y)
 	i := d.DVOffSet(x, y)
-	var dv uint64
-	if y == d.Bounds().Min.Y {
-		dv = uint64(v) - d.Values[i]
+	var dv = uint64(v)
+	if y == d.Rect.Min.Y {
+		dv -= d.Values[i]
 	} else {
-		dv = uint64(v) - d.Values[i] + d.Values[i-1]
+		dv -= d.Values[i] - d.Values[i-1]
 	}
 
 	// Now, update the column
-	for mi := i + d.Bounds().Max.Y - x; i < mi; i++ {
+	for mi := i + d.Rect.Max.Y - x; i < mi; i++ {
 		d.Values[i] += dv
 	}
 }
 
-func NewSumY(r image.Rectangle) SumY {
+func NewSumY(r image.Rectangle) *SumY {
 	w, h := r.Dx(), r.Dy()
 	dv := make([]uint64, w*h)
-	return SumY{Values: dv, Stride: h, Rect: r}
+	return &SumY{Values: dv, Stride: h, Rect: r}
 }
 
-func SumYFrom(i image.Image, d Model) SumY {
+func SumYFrom(i image.Image, d Model) *SumY {
 	r := i.Bounds()
 	w, h := r.Dx(), r.Dy()
 	dv := make([]uint64, w*h)
-	for j, x := 0, r.Min.X; x < r.Max.X; x++ {
-		dv[j] = uint64(d.Convert(i.At(x, r.Min.Y)))
-		j += h
-	}
-	for j, x := 0, r.Min.X; x < r.Max.X; x++ {
-		j++ // skip the first line
-		for y := r.Min.Y + 1; y < r.Max.Y; y++ {
-			dv[j] = dv[j-1] + uint64(d.Convert(i.At(x, y)))
-			j++
+	for x := 0; x < w; x++ {
+		for y, v := 0, uint64(0); y < h; y++ {
+			v += uint64(d.Convert(i.At(x+r.Min.X, y+r.Min.Y)))
+			dv[x*h+y] = v
 		}
 	}
-
-	return SumY{Values: dv, Stride: w, Rect: r}
+	return &SumY{Values: dv, Stride: h, Rect: r}
 
 }

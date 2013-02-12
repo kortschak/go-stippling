@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	maxGoRoutines = 16
+	maxGoRoutines = 256
 )
 
 func main() {
@@ -274,13 +274,14 @@ func QMFrom(img image.Image) (qm *quartermap) {
 }
 
 type colorquartermap struct {
-	R, G, B quartermap
+	R, G, B, A quartermap
 }
 
 func (cqm *colorquartermap) Split() {
 	cqm.R.Split()
 	cqm.G.Split()
 	cqm.B.Split()
+	cqm.A.Split()
 }
 
 func CQMFrom(img image.Image) (cqm *colorquartermap) {
@@ -288,6 +289,7 @@ func CQMFrom(img image.Image) (cqm *colorquartermap) {
 	cqm.R.ds = density.DSumFrom(img, density.RedDensity)
 	cqm.G.ds = density.DSumFrom(img, density.GreenDensity)
 	cqm.B.ds = density.DSumFrom(img, density.BlueDensity)
+	cqm.A.ds = density.DSumFrom(img, density.AlphaDensity)
 
 	cqm.R.cells = []*cell{&cell{
 		Source: cqm.R.ds,
@@ -300,6 +302,10 @@ func CQMFrom(img image.Image) (cqm *colorquartermap) {
 	cqm.B.cells = []*cell{&cell{
 		Source: cqm.B.ds,
 		r:      cqm.B.ds.Rect,
+		c:      0}}
+	cqm.A.cells = []*cell{&cell{
+		Source: cqm.A.ds,
+		r:      cqm.A.ds.Rect,
 		c:      0}}
 	return
 }
@@ -345,10 +351,17 @@ func (cqm *colorquartermap) To(img *image.RGBA) {
 			waitchan <- 1
 		}(c)
 	}
-	for y := img.Rect.Min.Y; y < img.Rect.Max.Y; y++ {
-		for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
-			img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4+3] = 0xFF
-		}
+	for _, c := range cqm.A.cells {
+		_ = <-waitchan
+		go func(c *cell) {
+			c.CalcC()
+			for y := c.r.Min.Y; y < c.r.Max.Y; y++ {
+				for x := c.r.Min.X; x < c.r.Max.X; x++ {
+					img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4+3] = uint8(c.c >> 8)
+				}
+			}
+			waitchan <- 1
+		}(c)
 	}
 	for i := 0; i < maxGoRoutines; i++ {
 		_ = <-waitchan

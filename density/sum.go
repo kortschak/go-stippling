@@ -9,7 +9,7 @@ import (
 // The Sum type is simply an aggregrate of both, with
 // some methods for added convenience. Use together with
 // SumMask to calculate weighed x, y and mass over an
-// area fast. 
+// area fast.
 type Sum struct {
 	X SumX
 	Y SumY
@@ -32,6 +32,25 @@ func (d *Sum) ColorModel() color.Model {
 	return color.Gray16Model
 }
 
-func SumFrom(i image.Image, d Model) Sum {
-	return Sum{SumXFrom(i, d), SumYFrom(i, d)}
+func SumFrom(i image.Image, d Model) *Sum {
+	r := i.Bounds()
+	w, h := r.Dx(), r.Dy()
+	xdv := make([]uint64, w*h)
+	for y := 0; y < h; y++ {
+		for x, v := 0, uint64(0); x < w; x++ {
+			v += uint64(d.Convert(i.At(x+r.Min.X, y+r.Min.Y)))
+			xdv[x+y*w] = v
+		}
+	}
+	ydv := make([]uint64, w*h)
+	for x := 0; x < w; x++ {
+		for y, v := 0, uint64(0); y < h; y++ {
+			v += uint64(d.Convert(i.At(x+r.Min.X, y+r.Min.Y)))
+			ydv[x*h+y] = v
+		}
+	}
+	return &Sum{
+		X: SumX{Values: xdv, Stride: w, Rect: r},
+		Y: SumY{Values: ydv, Stride: h, Rect: r},
+	}
 }
