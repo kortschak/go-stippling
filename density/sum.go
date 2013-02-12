@@ -7,9 +7,7 @@ import (
 
 // A common usecase is using both an SumX and a SumY map.
 // The Sum type is simply an aggregrate of both, with
-// some methods for added convenience. Use together with
-// SumMask to calculate weighed x, y and mass over an
-// area fast.
+// some methods for added convenience.
 type Sum struct {
 	X SumX
 	Y SumY
