@@ -24,7 +24,7 @@ func (sym *SumYMask) ValueAt(x, y int) (v uint64) {
 		column := sym.Points[y-sym.Rect.Min.Y]
 		var dv uint64
 		for i := 0; i < len(column) && column[i] < x; i += 2 {
-			dv = column[i+1]
+			dv = uint64(column[i+1])
 		}
 		v = dv
 	}
@@ -32,18 +32,18 @@ func (sym *SumYMask) ValueAt(x, y int) (v uint64) {
 }
 
 func (sym *SumYMask) ApplyTo(sy *SumY) {
-	if !sx.Rect.Intersect(sym.Rect).Empty() {
+	if !sy.Rect.Intersect(sym.Rect).Empty() {
 		var mass, wx uint64
 		for x := 0; x < sym.Rect.Dx(); x++ {
 			column := sym.Points[x]
 			var columnmass, pv uint64
 			for y := 0; y < sym.Rect.Dy(); y++ {
-				v := sy.ValueAt(x+sym.Rect.Min.X, line[y*2])
-				columnmass += (v - pv) * line[y*2+1]
+				v := sy.ValueAt(x+sym.Rect.Min.X, column[y*2])
+				columnmass += (v - pv) * uint64(column[y*2+1])
 				pv = v
 			}
 			mass += columnmass
-			wx += columnmass * x
+			wx += columnmass * uint64(x)
 		}
 		sym.Mass = float64(mass) / float64(sym.Range)
 		sym.Wx = float64(wx)/float64(mass) + float64(sym.Rect.Min.X)

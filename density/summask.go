@@ -6,8 +6,8 @@ type SumMask struct {
 }
 
 func (sm *SumMask) ApplyTo(s *Sum) {
-	sm.X.ApplyTo(s.X)
-	sm.Y.ApplyTo(s.Y)
+	sm.X.ApplyTo(&s.X)
+	sm.Y.ApplyTo(&s.Y)
 }
 
 func (sm *SumMask) Mass() float64 {
