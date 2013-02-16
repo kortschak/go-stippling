@@ -1,6 +1,9 @@
 // Splits density in half among longest axis.
 // Repeats for sub-cells for g generations.
-// Does not do sub-pixel precision.
+// Does not do sub-pixel precision, so it
+// will get "stuck" (try splitting into
+// more cells than the original number
+// of pixels to see this in practice).
 package main
 
 import (
@@ -17,7 +20,7 @@ import (
 )
 
 const (
-	maxGoRoutines = 256
+	maxGoRoutines = 256 //Arbitrarily chosen
 )
 
 func main() {
@@ -93,28 +96,28 @@ func main() {
 		}
 
 		if *mono {
-			qm := QMFrom(img)
-			imgout := image.NewGray16(qm.ds.Rect)
+			sp := SPFrom(img)
+			imgout := image.NewGray16(sp.ds.Rect)
 			for i := uint(0); uint(i) < *generations; i++ {
 				if *saveAll {
-					qm.To(imgout)
+					sp.To(imgout)
 					toFile(imgout, name(i))
 				}
-				qm.Split()
+				sp.Split()
 			}
-			qm.To(imgout)
+			sp.To(imgout)
 			toFile(imgout, name(*generations))
 		} else {
-			cqm := CQMFrom(img)
-			imgout := image.NewRGBA(cqm.R.ds.Rect)
+			csp := CSPFrom(img)
+			imgout := image.NewRGBA(csp.R.ds.Rect)
 			for i := uint(0); uint(i) < *generations; i++ {
 				if *saveAll {
-					cqm.To(imgout)
+					csp.To(imgout)
 					toFile(imgout, name(i))
 				}
-				cqm.Split()
+				csp.Split()
 			}
-			cqm.To(imgout)
+			csp.To(imgout)
 			toFile(imgout, name(*generations))
 		}
 	}
@@ -202,15 +205,15 @@ func (c *cell) Split() (child *cell) {
 	return
 }
 
-type quartermap struct {
+type splitmap struct {
 	ds    *density.DSum
 	cells []*cell
 }
 
-func (qm *quartermap) Split() {
-	qm.cells = append(qm.cells, qm.cells...)
-	oldcells := qm.cells[:len(qm.cells)/2]
-	newcells := qm.cells[len(qm.cells)/2:]
+func (sp *splitmap) Split() {
+	sp.cells = append(sp.cells, sp.cells...)
+	oldcells := sp.cells[:len(sp.cells)/2]
+	newcells := sp.cells[len(sp.cells)/2:]
 	waitchan := make(chan int, maxGoRoutines)
 
 	for i := 0; i < maxGoRoutines; i++ {
@@ -227,21 +230,21 @@ func (qm *quartermap) Split() {
 		_ = <-waitchan
 	}
 	/*
-		for i, v := range qm.cells {
+		for i, v := range sp.cells {
 			v.CalcC()
-			fmt.Printf("QMSplit %v\t Mass: %v\t C: %v\t W: %v-%v\t H: %v-%v\n", i, v.Mass(), v.c, v.r.Min.X, v.r.Max.X, v.r.Min.Y, v.r.Max.Y)
+			fmt.Printf("spSplit %v\t Mass: %v\t C: %v\t W: %v-%v\t H: %v-%v\n", i, v.Mass(), v.c, v.r.Min.X, v.r.Max.X, v.r.Min.Y, v.r.Max.Y)
 		}
 		println()
 	*/
 	return
 }
 
-func (qm *quartermap) To(img *image.Gray16) {
+func (sp *splitmap) To(img *image.Gray16) {
 	waitchan := make(chan int, maxGoRoutines)
 	for i := 0; i < maxGoRoutines; i++ {
 		waitchan <- 1
 	}
-	for _, c := range qm.cells {
+	for _, c := range sp.cells {
 		// since none of the pixels of the cells overlap, no worries about data races, right?
 		_ = <-waitchan
 		go func(c *cell) {
@@ -263,59 +266,59 @@ func (qm *quartermap) To(img *image.Gray16) {
 	return
 }
 
-func QMFrom(img image.Image) (qm *quartermap) {
-	qm = new(quartermap)
-	qm.ds = density.DSumFrom(img, density.AvgDensity)
-	qm.cells = []*cell{&cell{
-		Source: qm.ds,
-		r:      qm.ds.Rect,
+func SPFrom(img image.Image) (sp *splitmap) {
+	sp = new(splitmap)
+	sp.ds = density.DSumFrom(img, density.AvgDensity)
+	sp.cells = []*cell{&cell{
+		Source: sp.ds,
+		r:      sp.ds.Rect,
 		c:      0}}
 	return
 }
 
-type colorquartermap struct {
-	R, G, B, A quartermap
+type colorsplitmap struct {
+	R, G, B, A splitmap
 }
 
-func (cqm *colorquartermap) Split() {
-	cqm.R.Split()
-	cqm.G.Split()
-	cqm.B.Split()
-	cqm.A.Split()
+func (csp *colorsplitmap) Split() {
+	csp.R.Split()
+	csp.G.Split()
+	csp.B.Split()
+	csp.A.Split()
 }
 
-func CQMFrom(img image.Image) (cqm *colorquartermap) {
-	cqm = new(colorquartermap)
-	cqm.R.ds = density.DSumFrom(img, density.RedDensity)
-	cqm.G.ds = density.DSumFrom(img, density.GreenDensity)
-	cqm.B.ds = density.DSumFrom(img, density.BlueDensity)
-	cqm.A.ds = density.DSumFrom(img, density.AlphaDensity)
+func CSPFrom(img image.Image) (csp *colorsplitmap) {
+	csp = new(colorsplitmap)
+	csp.R.ds = density.DSumFrom(img, density.RedDensity)
+	csp.G.ds = density.DSumFrom(img, density.GreenDensity)
+	csp.B.ds = density.DSumFrom(img, density.BlueDensity)
+	csp.A.ds = density.DSumFrom(img, density.AlphaDensity)
 
-	cqm.R.cells = []*cell{&cell{
-		Source: cqm.R.ds,
-		r:      cqm.R.ds.Rect,
+	csp.R.cells = []*cell{&cell{
+		Source: csp.R.ds,
+		r:      csp.R.ds.Rect,
 		c:      0}}
-	cqm.G.cells = []*cell{&cell{
-		Source: cqm.G.ds,
-		r:      cqm.G.ds.Rect,
+	csp.G.cells = []*cell{&cell{
+		Source: csp.G.ds,
+		r:      csp.G.ds.Rect,
 		c:      0}}
-	cqm.B.cells = []*cell{&cell{
-		Source: cqm.B.ds,
-		r:      cqm.B.ds.Rect,
+	csp.B.cells = []*cell{&cell{
+		Source: csp.B.ds,
+		r:      csp.B.ds.Rect,
 		c:      0}}
-	cqm.A.cells = []*cell{&cell{
-		Source: cqm.A.ds,
-		r:      cqm.A.ds.Rect,
+	csp.A.cells = []*cell{&cell{
+		Source: csp.A.ds,
+		r:      csp.A.ds.Rect,
 		c:      0}}
 	return
 }
 
-func (cqm *colorquartermap) To(img *image.RGBA) {
+func (csp *colorsplitmap) To(img *image.RGBA) {
 	waitchan := make(chan int, maxGoRoutines)
 	for i := 0; i < maxGoRoutines; i++ {
 		waitchan <- 1
 	}
-	for _, c := range cqm.R.cells {
+	for _, c := range csp.R.cells {
 		_ = <-waitchan
 		go func(c *cell) {
 			c.CalcC()
@@ -327,7 +330,7 @@ func (cqm *colorquartermap) To(img *image.RGBA) {
 			waitchan <- 1
 		}(c)
 	}
-	for _, c := range cqm.G.cells {
+	for _, c := range csp.G.cells {
 		_ = <-waitchan
 		go func(c *cell) {
 			c.CalcC()
@@ -339,7 +342,7 @@ func (cqm *colorquartermap) To(img *image.RGBA) {
 			waitchan <- 1
 		}(c)
 	}
-	for _, c := range cqm.B.cells {
+	for _, c := range csp.B.cells {
 		_ = <-waitchan
 		go func(c *cell) {
 			c.CalcC()
@@ -351,7 +354,7 @@ func (cqm *colorquartermap) To(img *image.RGBA) {
 			waitchan <- 1
 		}(c)
 	}
-	for _, c := range cqm.A.cells {
+	for _, c := range csp.A.cells {
 		_ = <-waitchan
 		go func(c *cell) {
 			c.CalcC()
