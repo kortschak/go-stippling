@@ -1,35 +1,35 @@
-// Package density implements functions to map pixels in an image 
-// to associated density values, and store them in a Map (not to
-// be confused with the built-in type). It is mostly an adaptation
-// of the code found in the standard library's image package, and
-// still uses Point and Rect from that package.
-//
-// Although written for making weighted voronoi maps based on 
-// images, it probably can be used more widely than that.
-//
-// Density values of a pixel as defined by the density model are 
-// stored as uint16 values. Maps implement the Image interface, as
-// Gray16 images. Note that it's trivial to make a struct that wraps
-// density maps as different colour channels (see examples).
-//
-// SumX, SumY and DSum are special density Maps that store summed 
-// density values values over the X-axis, the Y-axis, and both X 
-// and Y axes respectively. When an algorithm requires summing
-// the values over a large area of a Map, these maps can in theory
-// do this faster by reducing the number of memory lookups needed.
-// Take note that potential speed benefits also greatly depend on
-// things like branch prediction.
-//
-// As these sums most likely overflow 16 bit values, they are
-// stored internally as uint64. They still produce the same
-// Gray16 image output though, automatically correcting away
-// their summed values for the image interface.
-//
-// SumMask, SumXMask and SumYMask are specialised to use the 
-// precomputation benefits of the Sum, SumX and SumY types. By 
-// storing only the coordinates that one wants to sum over, these
-// masks can be much smaller. This is especially true for large
-// homogenous masks.
+/*
+Package density implements functions to map pixels in an image
+to associated density values, and store them in a Map (not to
+be confused with the built-in type). It is mostly an adaptation
+of the code found in the standard library's image package, and
+still uses Point and Rect from that package.
+
+Although written with the intent of calulating weighted voronoi
+maps based on images, it can be used more widely than that.
+
+Density values of a pixel as defined by the density model are
+stored as uint16 values. Maps implement the Image interface, as
+Gray16 images. Note that it's trivial to make a struct that wraps
+density maps as different colour channels (see the examples).
+
+SumX, SumY and DSum are special density Maps that store summed
+density values over the X-axis, the Y-axis, and both respectively.
+When an algorithm requires summing the values over a large area
+of a Map, these maps can in theory do this faster by reducing the
+number of memory lookups needed. Take note that potential speed
+benefits also greatly depend on things like branch prediction.
+
+As these sums most likely overflow 16 bit values, they are
+stored internally as uint64. They still produce the same
+Gray16 image output though, automatically correcting away
+their summed values for the image interface.
+
+SumMask, SumXMask and SumYMask are specialised to use the
+precomputation benefits of the Sum, SumX and SumY types. By
+storing only the coordinates that one wants to sum over, these
+masks can be much smaller.
+*/
 package density
 
 import (
@@ -37,13 +37,13 @@ import (
 	"image/color"
 )
 
-// Map is a finite rectangular grid of density values, usually 
-// converted from the colors of an image. 
+// Map is a finite rectangular grid of density values, usually
+// converted from the colors of an image.
 type Map struct {
-	// Values holds the map's density values. The value at (x, y) 
+	// Values holds the map's density values. The value at (x, y)
 	// starts at Values[(y-Rect.Min.Y)*Stride + (x-Rect.Min.X)*1].
 	Values []uint16
-	// Stride is the Values' stride between 
+	// Stride is the Values' stride between
 	// vertically adjacent pixels.
 	Stride int
 	// Rect is the Map's bounds.
@@ -68,7 +68,7 @@ func (d *Map) ColorModel() color.Model {
 	return color.Gray16Model
 }
 
-// DVOffset returns the index that corresponds to Values 
+// DVOffset returns the index that corresponds to Values
 // at (x, y).
 func (d *Map) DVOffSet(x, y int) int {
 	return (y-d.Rect.Min.Y)*d.Stride + (x - d.Rect.Min.X)
@@ -101,7 +101,7 @@ func (d *Map) Set(x, y int, v uint16) {
 // previous value at (x,y) was 0. A Map internally saves the total
 // mass and the weighed x and y, and by making this assumption
 // those values are easier and faster to update.
-// Use it to speed up constructors. 
+// Use it to speed up constructors.
 func (d *Map) InitSet(x, y int, v uint16) {
 	if !(image.Point{x, y}.In(d.Rect)) {
 		return
@@ -130,7 +130,7 @@ func (d *Map) At(x, y int) (v color.Color) {
 }
 
 // ValueAt(x, y) returns the density value at point (x,y), but as a uint16
-// instead of a color.Color interface. If (x,y) is out of bounds, it 
+// instead of a color.Color interface. If (x,y) is out of bounds, it
 // returns a density of zero.
 func (d *Map) ValueAt(x, y int) (v uint64) {
 	if (image.Point{x, y}.In(d.Rect)) {
@@ -154,14 +154,14 @@ func (d *Map) Mass() uint64 {
 }
 
 // WX returns the weighted X of the density map. Note that it is not
-// bounds-corrected (that is: it takes the top-left corner of the 
+// bounds-corrected (that is: it takes the top-left corner of the
 // map to be at point (0,0) instead of (Rect.Min.X, Rect.Min.Y))
 func (d *Map) WX() uint64 {
 	return d.wx
 }
 
 // WY returns the weighted Y of the density map. Note that it is not
-// bounds-corrected (that is: it takes the top-left corner of the 
+// bounds-corrected (that is: it takes the top-left corner of the
 // map to be at point (0,0) instead of (Rect.Min.X, Rect.Min.Y))
 func (d *Map) WY() uint64 {
 	return d.wy
@@ -182,9 +182,9 @@ func NewMap(r image.Rectangle) (d *Map) {
 	return
 }
 
-// Determines the density values of image.Image according to the density 
+// Determines the density values of image.Image according to the density
 // model it is given, and returns the results as a new Map.
-func MapFrom(i image.Image, d Model) Map {
+func MapFrom(i image.Image, d Model) *Map {
 	r := i.Bounds()
 	w, h := r.Dx(), r.Dy()
 	dv := make([]uint16, w*h)
@@ -194,10 +194,10 @@ func MapFrom(i image.Image, d Model) Map {
 			dm.InitSet(x, y, d.Convert(i.At(x, y)))
 		}
 	}
-	return dm
+	return &dm
 }
 
-// SubMap returns a Map representing the portion of the Map d visible 
+// SubMap returns a Map representing the portion of the Map d visible
 // through r. The returned map shares values with the original map.
 func (d *Map) SubMap(r image.Rectangle) *Map {
 	r = r.Intersect(d.Rect)
@@ -234,7 +234,7 @@ func (d *Map) SubMap(r image.Rectangle) *Map {
 	}
 }
 
-// Intersect returns a new Map representing the portion of the Map d visible 
+// Intersect returns a new Map representing the portion of the Map d visible
 // as alpha-masked by density map m. Returns nil if intersection is empty.
 func (d *Map) Intersect(m *Map) *Map {
 	r := m.Rect.Intersect(d.Rect)

@@ -1,7 +1,7 @@
 package main
 
-// dipmap takes an image and converts it into two density maps: 
-// a positive and negative version. The centres of mass of 
+// dipmap takes an image and converts it into two density maps:
+// a positive and negative version. The centres of mass of
 // these are then used as two poles. Using these as generators,
 // two voronoi cells are generated within the boundaries. For
 // each cell, this process can then be repeated: determine the
@@ -210,7 +210,7 @@ func (dm *DMap) makeMasks(idx int, ch chan *dipole) {
 	cy := (y0 + y1) / 2
 
 	// Find the slopes along x and y for the line that is the set of points
-	// at equal distance from (x0, y0) and (x1, y1), then split along the 
+	// at equal distance from (x0, y0) and (x1, y1), then split along the
 	// one that is least steep (which is always < 1 ).
 	dx := x1 - x0
 	dy := y1 - y0
@@ -221,7 +221,7 @@ func (dm *DMap) makeMasks(idx int, ch chan *dipole) {
 	} else if math.Abs(dy) < math.Abs(dx) {
 		dx = -dy / dx
 	} else {
-		// If both centres of mass are at the same spot, due to symmetry 
+		// If both centres of mass are at the same spot, due to symmetry
 		// or homogenous density, split along the shortest axis.
 		h = r.Dx() < r.Dy()
 		dx = 0
