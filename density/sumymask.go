@@ -38,9 +38,9 @@ func (sym *SumYMask) ApplyTo(sy *SumY) {
 		for x, column := range sym.Points {
 			var columnmass, pv uint64
 			py := sym.Rect.Min.Y
-			for i := 0; i < sym.Rect.Dy(); i++ {
-				y := column[i*2] - 1
-				mask := uint64(column[i*2+1])
+			for i := 0; i < len(column); i += 2 {
+				y := column[i] - 1
+				mask := uint64(column[i+1])
 				v := sy.ValueAt(x+sym.Rect.Min.X, y)
 				columnmass += (v - pv) * mask
 				pv = v

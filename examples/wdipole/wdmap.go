@@ -198,7 +198,7 @@ func (wd *WDMap) makeMasks(idx int, ch chan *dipole) {
 	x0, y0 := Result.CM()
 	x1, y1 := wd.dipoles[idx].S.Result.CM()
 
-	// Calculate the weighted centre. Yes, these four lines 
+	// Calculate the weighted centre. Yes, these four lines
 	// are the only difference between WDMap and DMap
 	w0 := float64(Result.Mass())
 	w1 := float64(wd.dipoles[idx].S.Result.Mass())
@@ -207,7 +207,7 @@ func (wd *WDMap) makeMasks(idx int, ch chan *dipole) {
 	cy := (y0*w1 + y1*w0) / (w0 + w1)
 
 	// Find the slopes along x and y for the line that is the set of points
-	// at equal distance from (x0, y0) and (x1, y1), then split along the 
+	// at equal distance from (x0, y0) and (x1, y1), then split along the
 	// one that is least steep (which is always < 1 ).
 	dx := x1 - x0
 	dy := y1 - y0
@@ -218,7 +218,7 @@ func (wd *WDMap) makeMasks(idx int, ch chan *dipole) {
 	} else if math.Abs(dy) < math.Abs(dx) {
 		dx = -dy / dx
 	} else {
-		// If both centres of mass are at the same spot, due to symmetry 
+		// If both centres of mass are at the same spot, due to symmetry
 		// or homogenous density, split along the shortest axis.
 		h = r.Dx() < r.Dy()
 		dx = 0
@@ -293,7 +293,7 @@ func NewWD(i image.Image, nd, sd density.Model, c uint) (wd *WDMap) {
 		}
 	}
 
-	wd.dipoles[0] = *newDipole(&n, &s, m)
+	wd.dipoles[0] = *newDipole(n, s, m)
 	return
 }
 

@@ -38,9 +38,9 @@ func (sxm *SumXMask) ApplyTo(sx *SumX) {
 		for y, line := range sxm.Points {
 			var linemass, pv uint64
 			px := sxm.Rect.Min.X
-			for i := 0; i < sxm.Rect.Dx(); i++ {
-				x := line[i*2] - 1
-				mask := uint64(line[i*2+1])
+			for i := 0; i < len(line); i += 2 {
+				x := line[i] - 1
+				mask := uint64(line[i+1])
 				v := sx.ValueAt(x, y+sxm.Rect.Min.Y)
 				linemass += (v - pv) * mask
 				pv = v

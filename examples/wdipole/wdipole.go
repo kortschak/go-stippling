@@ -1,5 +1,5 @@
-// Example application for voronoi/density package other 
-// than voronoi diagrams. dipmap is a specialised density 
+// Example application for voronoi/density package other
+// than voronoi diagrams. dipmap is a specialised density
 // map for creating dipoles, which can then be further
 // split into dipoles. After N generations, it has
 // divided a source image into 2^N cells.
@@ -16,6 +16,7 @@ import (
 	"image/png"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	//"strings"
@@ -31,7 +32,6 @@ func main() {
 	var saveAll = flag.Bool("s", true, "\t\t(s)ave all generations (default) - only save last generation if false")
 	var numCores = flag.Int("c", 1, "\t\tMax number of (c)ores to be used.\n\t\t\tUse all available cores if less or equal to zero")
 	flag.Parse()
-	var inputfiles = flag.Args()
 
 	var nc int //used later as well, in case you're wondering
 	if *numCores <= 0 || *numCores > runtime.NumCPU() {
@@ -46,19 +46,18 @@ func main() {
 	// all of the variables. This feels dirty way of doing this, but
 	// it works.
 	var fileNum int
-	var fileName string
-	processFiles := func() {
+	processFiles := func(fileName string) error {
 		file, err := os.Open(fileName)
 		if err != nil {
 			log.Println(err)
-			return
+			return err
 		}
 		defer file.Close()
 
 		img, _, err := image.Decode(file)
 		if err != nil {
-			log.Println(err, "\tfilename:", fileName, "\tinput nr:", fileNum)
-			return
+			log.Println(err, "Could not decode image:", fileName)
+			return nil
 		}
 		toFile := func(i image.Image, g uint) {
 
@@ -116,10 +115,23 @@ func main() {
 			cwdm.Render(nc)
 			toFile(cwdm, *generations)
 		}
+		fileNum++
+		return nil
 	}
 
-	for fileNum, fileName = range inputfiles {
-		processFiles()
+	files := []string{}
+	listFiles := func(path string, f os.FileInfo, err error) error {
+		files = append(files, path)
+		return nil
+	}
 
+	root := flag.Arg(0)
+	err := filepath.Walk(root, listFiles)
+	if err != nil {
+		log.Printf("filepath.Walk() returned %v\n", err)
+	}
+
+	for _, file := range files {
+		processFiles(file)
 	}
 }
