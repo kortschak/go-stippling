@@ -7,8 +7,8 @@ package main
 
 import (
 	"code.google.com/p/go-stippling/density"
+	"code.google.com/p/go-stippling/examples/util"
 	"code.google.com/p/intmath/intgr"
-	"flag"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -16,49 +16,22 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 )
 
-const (
-	maxGoRoutines = 256 //Arbitrarily chosen
-)
-
-var Xweight, Yweight, Zweight int
-
 func main() {
 
-	var outputName = flag.String("o", "output", "\t\tName of the (o)utput (no extension)")
-	var outputExt = flag.Uint("e", 1, "\t\tOutput (e)xtension type:\n\t\t\t 1 \t png (default)\n\t\t\t 2 \t jpg")
-	var jpgQuality = flag.Int("q", 90, "\t\tJPG output (q)uality")
-	//if we assume one minute of input, that is 60*24 frames = 1440 ~ 11 bits.
-	var generations = flag.Uint("g", 24, "\t\tNumber of (g)enerations")
-	var xweight = flag.Int("x", 1, "\t\tRelative weight of (x) axis")
-	var yweight = flag.Int("y", 1, "\t\tRelative weight of (y) axis")
-	var zweight = flag.Int("z", 1, "\t\tRelative weight of (z) axis")
-	var numCores = flag.Int("c", 1, "\t\tMax number of (c)ores to be used.\n\t\t\tUse all available cores if less or equal to zero")
-	var mono = flag.Bool("mono", true, "\t\tMonochrome or colour output")
-	flag.Parse()
+	util.Init()
 
-	Xweight = *xweight
-	Yweight = *yweight
-	Zweight = *zweight
+	files := util.ListFiles()
 
-	if *numCores <= 0 || *numCores > runtime.NumCPU() {
-		runtime.GOMAXPROCS(runtime.NumCPU())
-	} else {
-		runtime.GOMAXPROCS(*numCores)
-	}
-
-	files := listFiles(flag.Arg(0))
-
-	if *mono {
+	if util.Mono {
 		var sp *splitmap
 
 		fmt.Printf("\nFilling the cube with frames.\n")
 		for _, fileName := range files {
-			img, err := fileToImage(fileName)
+			img, err := util.FileToImage(fileName)
 			if err == nil {
 				if sp == nil {
 					sp = SPFrom(img, len(files), density.AvgDensity)
@@ -70,7 +43,7 @@ func main() {
 		}
 
 		fmt.Printf("\nSplitting cells.\n")
-		for i := uint(0); i < *generations; i++ {
+		for i := uint(0); i < util.Generations; i++ {
 			sp.Split()
 			fmt.Printf("Generation: %v\tCells: %v\n", i, len(sp.cells))
 		}
@@ -81,10 +54,10 @@ func main() {
 		fmt.Printf("\nConverting cells back to %v frames.\n", sp.source.LenZ)
 
 		imgout := image.NewGray16(sp.source.Rect)
-		waitchan := make(chan int, maxGoRoutines)
+		waitchan := make(chan int, util.MaxGoroutines)
 
 		for z, i := 0, 0; z < sp.source.LenZ; z++ {
-			for i := 0; i < maxGoRoutines; i++ {
+			for i := 0; i < util.MaxGoroutines; i++ {
 				waitchan <- 1
 			}
 			for c := cs.stream[i]; c.Z == z; {
@@ -106,12 +79,11 @@ func main() {
 					break
 				}
 			}
-			for i := 0; i < maxGoRoutines; i++ {
+			for i := 0; i < util.MaxGoroutines; i++ {
 				_ = <-waitchan
 			}
 
-			filename := sequence(outputName, z, outputExt)
-			imgToFile(imgout, filename, outputExt, jpgQuality)
+			util.ImgToFile(imgout, z)
 			fmt.Printf(".")
 		}
 		fmt.Printf("done.")
@@ -132,7 +104,7 @@ func main() {
 		}
 
 		fmt.Printf("\nSplitting cells.\n")
-		for i := uint(0); i < *generations; i++ {
+		for i := uint(0); i < util.Generations; i++ {
 			sp.Split()
 			fmt.Printf("Generation: %v\tRed cells: %v\n", i, len(sp.cells))
 		}
@@ -158,7 +130,7 @@ func main() {
 		}
 
 		fmt.Printf("\nSplitting cells.\n")
-		for i := uint(0); i < *generations; i++ {
+		for i := uint(0); i < util.Generations; i++ {
 			sp.Split()
 			fmt.Printf("Generation: %v\tGreen cells: %v\n", i, len(sp.cells))
 		}
@@ -183,7 +155,7 @@ func main() {
 		}
 
 		fmt.Printf("\nSplitting cells.\n")
-		for i := uint(0); i < *generations; i++ {
+		for i := uint(0); i < util.Generations; i++ {
 			sp.Split()
 			fmt.Printf("Generation: %v\tBlue cells: %v\n", i, len(sp.cells))
 		}
@@ -206,9 +178,9 @@ func main() {
 			imgout.Pix[i] = 0xFF
 		}
 
-		waitchan := make(chan int, maxGoRoutines)
+		waitchan := make(chan int, util.MaxGoroutines)
 		for z, r, g, b := 0, 0, 0, 0; z < sp.source.LenZ; z++ {
-			for j := 0; j < maxGoRoutines; j++ {
+			for j := 0; j < util.MaxGoroutines; j++ {
 				waitchan <- 1
 			}
 			for c := rcs.stream[r]; c.Z == z; {
@@ -265,12 +237,11 @@ func main() {
 				}
 			}
 
-			for j := 0; j < maxGoRoutines; j++ {
+			for j := 0; j < util.MaxGoroutines; j++ {
 				_ = <-waitchan
 			}
 
-			filename := sequence(outputName, z, outputExt)
-			imgToFile(imgout, filename, outputExt, jpgQuality)
+			util.ImgToFile(imgout, z)
 			fmt.Printf(".")
 		}
 	}
@@ -375,22 +346,22 @@ func (c *cell) Split(cellchan chan *cell) int {
 	ncx := c.Source.FindNegCx(c.Rect, c.zmin, c.zmax)
 	ncy := c.Source.FindNegCy(c.Rect, c.zmin, c.zmax)
 	ncz := c.Source.FindNegCz(c.Rect, c.zmin, c.zmax)
-	dx := Xweight * intgr.Abs(cx-ncx)
-	dy := Yweight * intgr.Abs(cy-ncy)
-	dz := Zweight * intgr.Abs(cz-ncz)
-	if dz >= dx && dz >= dy && dz > Zweight {
+	dx := util.Xweight * intgr.Abs(cx-ncx)
+	dy := util.Yweight * intgr.Abs(cy-ncy)
+	dz := util.Zweight * intgr.Abs(cz-ncz)
+	if dz >= dx && dz >= dy && dz > util.Zweight {
 		c.zmax = (cz + ncz + 1) / 2
 		child.zmin = (cz + ncz + 1) / 2
 		cellchan <- child
 		return 1
 	}
-	if dx >= dy && dx > Xweight {
+	if dx >= dy && dx > util.Xweight {
 		c.Rect.Max.X = (cx + ncx + 1) / 2
 		child.Rect.Min.X = (cx + ncx + 1) / 2
 		cellchan <- child
 		return 1
 	}
-	if dy > Yweight {
+	if dy > util.Yweight {
 		c.Rect.Max.Y = (cy + ncy + 1) / 2
 		child.Rect.Min.Y = (cy + ncy + 1) / 2
 		cellchan <- child
@@ -406,9 +377,9 @@ type splitmap struct {
 
 func (sp *splitmap) Split() {
 	cellchan := make(chan *cell, len(sp.cells)*2)
-	waitchan := make(chan int, maxGoRoutines)
+	waitchan := make(chan int, util.MaxGoroutines)
 
-	for i := 0; i < maxGoRoutines; i++ {
+	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 0
 	}
 	var totalcells int
@@ -418,7 +389,7 @@ func (sp *splitmap) Split() {
 			waitchan <- c.Split(cellchan)
 		}(i, c)
 	}
-	for i := 0; i < maxGoRoutines; i++ {
+	for i := 0; i < util.MaxGoroutines; i++ {
 		totalcells += <-waitchan
 	}
 
@@ -448,8 +419,8 @@ func (sp *splitmap) AddFrame(i *image.Image, dm density.Model) {
 
 // Alternative ways to write to an image - cellstream is preferred
 func (sp *splitmap) To(img *image.Gray16, frame int) {
-	waitchan := make(chan int, maxGoRoutines)
-	for i := 0; i < maxGoRoutines; i++ {
+	waitchan := make(chan int, util.MaxGoroutines)
+	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
 	for _, c := range sp.cells {
@@ -468,15 +439,15 @@ func (sp *splitmap) To(img *image.Gray16, frame int) {
 			}(c)
 		}
 	}
-	for i := 0; i < maxGoRoutines; i++ {
+	for i := 0; i < util.MaxGoroutines; i++ {
 		_ = <-waitchan
 	}
 	return
 }
 
 func (sp *splitmap) ToR(img *image.RGBA, frame int) {
-	waitchan := make(chan int, maxGoRoutines)
-	for i := 0; i < maxGoRoutines; i++ {
+	waitchan := make(chan int, util.MaxGoroutines)
+	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
 	for _, c := range sp.cells {
@@ -493,15 +464,15 @@ func (sp *splitmap) ToR(img *image.RGBA, frame int) {
 		}
 	}
 
-	for i := 0; i < maxGoRoutines; i++ {
+	for i := 0; i < util.MaxGoroutines; i++ {
 		_ = <-waitchan
 	}
 	return
 }
 
 func (sp *splitmap) ToG(img *image.RGBA, frame int) {
-	waitchan := make(chan int, maxGoRoutines)
-	for i := 0; i < maxGoRoutines; i++ {
+	waitchan := make(chan int, util.MaxGoroutines)
+	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
 	for _, c := range sp.cells {
@@ -518,15 +489,15 @@ func (sp *splitmap) ToG(img *image.RGBA, frame int) {
 		}
 	}
 
-	for i := 0; i < maxGoRoutines; i++ {
+	for i := 0; i < util.MaxGoroutines; i++ {
 		_ = <-waitchan
 	}
 	return
 }
 
 func (sp *splitmap) ToB(img *image.RGBA, frame int) {
-	waitchan := make(chan int, maxGoRoutines)
-	for i := 0; i < maxGoRoutines; i++ {
+	waitchan := make(chan int, util.MaxGoroutines)
+	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
 	for _, c := range sp.cells {
@@ -543,15 +514,15 @@ func (sp *splitmap) ToB(img *image.RGBA, frame int) {
 		}
 	}
 
-	for i := 0; i < maxGoRoutines; i++ {
+	for i := 0; i < util.MaxGoroutines; i++ {
 		_ = <-waitchan
 	}
 	return
 }
 
 func (sp *splitmap) ToA(img *image.RGBA, frame int) {
-	waitchan := make(chan int, maxGoRoutines)
-	for i := 0; i < maxGoRoutines; i++ {
+	waitchan := make(chan int, util.MaxGoroutines)
+	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
 	for _, c := range sp.cells {
@@ -568,7 +539,7 @@ func (sp *splitmap) ToA(img *image.RGBA, frame int) {
 		}
 	}
 
-	for i := 0; i < maxGoRoutines; i++ {
+	for i := 0; i < util.MaxGoroutines; i++ {
 		_ = <-waitchan
 	}
 	return
