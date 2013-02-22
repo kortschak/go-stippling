@@ -70,12 +70,12 @@ func main() {
 			}
 			num = num + strconv.Itoa(int(g))
 
-			splitName := *outputName + "-" + strconv.Itoa(fileNum) + "-"
+			splitName := *outputName + "-" + num + "-" + strconv.Itoa(fileNum)
 			switch *outputExt {
 			case 1:
-				splitName = splitName + num + ".png"
+				splitName = splitName + ".png"
 			case 2:
-				splitName = splitName + num + ".jpg"
+				splitName = splitName + ".jpg"
 			}
 
 			output, err := os.Create(splitName)

@@ -53,14 +53,14 @@ func main() {
 		}
 		num = num + strconv.Itoa(int(g))
 
-		quarterName := *outputName + "-" + strconv.Itoa(fileNum) + "-"
+		splitName := *outputName + "-" + num + "-" + strconv.Itoa(fileNum)
 		switch *outputExt {
 		case 1:
-			quarterName = quarterName + num + ".png"
+			splitName = splitName + ".png"
 		case 2:
-			quarterName = quarterName + num + ".jpg"
+			splitName = splitName + ".jpg"
 		}
-		return quarterName
+		return splitName
 	}
 
 	processFiles := func(fileName string) error {
@@ -232,11 +232,9 @@ func (qrt *quartmap) Quarter() {
 	for i := 0; i < maxGoRoutines; i++ {
 		totalcells += <-waitchan
 	}
-	newcells := make([]*cell, 0)
 	for i := 0; i < totalcells; i++ {
-		newcells = append(newcells, <-cellchan)
+		qrt.cells = append(qrt.cells, <-cellchan)
 	}
-	qrt.cells = newcells
 	/*
 		for i, v := range qrt.cells {
 			v.CalcC()

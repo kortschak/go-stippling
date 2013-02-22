@@ -39,7 +39,7 @@ var (
 
 func avgDensity(c color.Color) (d uint16) {
 	r, g, b, _ := c.RGBA()
-	d = uint16((r + g + b) / 3)
+	d = uint16((r + g + b + 1) / 3)
 	return
 }
 

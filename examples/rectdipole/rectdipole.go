@@ -1,5 +1,4 @@
-// Splits density in half among longest axis.
-// Repeats for sub-cells for g generations.
+// Implements rectangular version of dipole.
 // Does not do sub-pixel precision, so it
 // will get "stuck" (try splitting into
 // more cells than the original number
@@ -8,6 +7,7 @@ package main
 
 import (
 	"code.google.com/p/go-stippling/density"
+	"code.google.com/p/intmath/intgr"
 	"flag"
 	//"fmt"
 	"image"
@@ -96,7 +96,7 @@ func main() {
 
 		if *mono {
 			sp := SPFrom(img)
-			imgout := image.NewGray16(sp.ds.Rect)
+			imgout := image.NewGray16(sp.north.Rect)
 			for i := uint(0); uint(i) < *generations; i++ {
 				if *saveAll {
 					sp.To(imgout)
@@ -108,7 +108,7 @@ func main() {
 			toFile(imgout, name(*generations))
 		} else {
 			csp := CSPFrom(img)
-			imgout := image.NewRGBA(csp.R.ds.Rect)
+			imgout := image.NewRGBA(csp.R.north.Rect)
 			for i := uint(0); uint(i) < *generations; i++ {
 				if *saveAll {
 					csp.To(imgout)
@@ -141,18 +141,14 @@ func main() {
 }
 
 type cell struct {
-	Source *density.DSum
-	r      image.Rectangle
-	c      uint16
-}
-
-func (c *cell) Mass() uint64 {
-	return c.Source.AreaSum(c.r)
+	North, South *density.DSum
+	Rect         image.Rectangle
+	c            uint16
 }
 
 func (c *cell) CalcC() {
-	if c.r.Dx()*c.r.Dy() != 0 {
-		c.c = uint16(c.Mass() / uint64(c.r.Dx()*c.r.Dy()))
+	if c.Rect.Dx()*c.Rect.Dy() != 0 {
+		c.c = uint16(c.North.AreaSum(c.Rect) / uint64(c.Rect.Dx()*c.Rect.Dy()))
 	} else {
 		c.c = 0
 	}
@@ -247,26 +243,36 @@ func findcy(ds *density.DSum, r image.Rectangle) int {
 func (c *cell) Split() (child *cell) {
 
 	child = &cell{
-		Source: c.Source,
-		r:      c.r,
-		c:      0,
+		North: c.North,
+		South: c.South,
+		Rect:  c.Rect,
+		c:     0,
 	}
 
-	if c.r.Dx() > c.r.Dy() {
-		x := findcx(c.Source, c.r)
-		c.r.Max.X = x
-		child.r.Min.X = x
+	ncx := findcx(c.North, c.Rect)
+	ncy := findcy(c.North, c.Rect)
+	scx := findcx(c.South, c.Rect)
+	scy := findcx(c.South, c.Rect)
+
+	if intgr.Abs(ncx-scx) > intgr.Abs(ncy-scy) {
+		// split along y axis
+		child.Rect.Max.Y = (scy + ncy) / 2
+		c.Rect.Min.Y = (scy + ncy) / 2
+	} else if intgr.Abs(ncx-scx) < intgr.Abs(ncy-scy) || c.Rect.Dx() > c.Rect.Dy() {
+		// split along x axis
+		child.Rect.Max.X = (scx + ncx) / 2
+		c.Rect.Min.X = (scx + ncx) / 2
 	} else {
-		y := findcy(c.Source, c.r)
-		c.r.Max.Y = y
-		child.r.Min.Y = y
+		child.Rect.Max.Y = (scy + ncy) / 2
+		c.Rect.Min.Y = (scy + ncy) / 2
 	}
+
 	return
 }
 
 type splitmap struct {
-	ds    *density.DSum
-	cells []*cell
+	north, south *density.DSum
+	cells        []*cell
 }
 
 func (sp *splitmap) Split() {
@@ -288,13 +294,6 @@ func (sp *splitmap) Split() {
 	for i := 0; i < maxGoRoutines; i++ {
 		_ = <-waitchan
 	}
-	/*
-		for i, v := range sp.cells {
-			v.CalcC()
-			fmt.Printf("spSplit %v\t Mass: %v\t C: %v\t W: %v-%v\t H: %v-%v\n", i, v.Mass(), v.c, v.r.Min.X, v.r.Max.X, v.r.Min.Y, v.r.Max.Y)
-		}
-		println()
-	*/
 	return
 }
 
@@ -308,8 +307,8 @@ func (sp *splitmap) To(img *image.Gray16) {
 		_ = <-waitchan
 		go func(c *cell) {
 			c.CalcC()
-			for y := c.r.Min.Y; y < c.r.Max.Y; y++ {
-				for x := c.r.Min.X; x < c.r.Max.X; x++ {
+			for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
+				for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 					i := img.PixOffset(x, y)
 					img.Pix[i+0] = uint8(c.c >> 8)
 					img.Pix[i+1] = uint8(c.c)
@@ -327,11 +326,13 @@ func (sp *splitmap) To(img *image.Gray16) {
 
 func SPFrom(img image.Image) (sp *splitmap) {
 	sp = new(splitmap)
-	sp.ds = density.DSumFrom(img, density.AvgDensity)
+	sp.north = density.DSumFrom(img, density.AvgDensity)
+	sp.south = density.DSumFrom(img, density.NegAvgDensity)
 	sp.cells = []*cell{&cell{
-		Source: sp.ds,
-		r:      sp.ds.Rect,
-		c:      0}}
+		North: sp.north,
+		South: sp.south,
+		Rect:  sp.north.Rect,
+		c:     0}}
 	return
 }
 
@@ -348,27 +349,35 @@ func (csp *colorsplitmap) Split() {
 
 func CSPFrom(img image.Image) (csp *colorsplitmap) {
 	csp = new(colorsplitmap)
-	csp.R.ds = density.DSumFrom(img, density.RedDensity)
-	csp.G.ds = density.DSumFrom(img, density.GreenDensity)
-	csp.B.ds = density.DSumFrom(img, density.BlueDensity)
-	csp.A.ds = density.DSumFrom(img, density.AlphaDensity)
+	csp.R.north = density.DSumFrom(img, density.RedDensity)
+	csp.R.south = density.DSumFrom(img, density.NegRedDensity)
+	csp.G.north = density.DSumFrom(img, density.GreenDensity)
+	csp.G.south = density.DSumFrom(img, density.NegGreenDensity)
+	csp.B.north = density.DSumFrom(img, density.BlueDensity)
+	csp.B.south = density.DSumFrom(img, density.NegBlueDensity)
+	csp.A.north = density.DSumFrom(img, density.AlphaDensity)
+	csp.A.south = density.DSumFrom(img, density.NegAlphaDensity)
 
 	csp.R.cells = []*cell{&cell{
-		Source: csp.R.ds,
-		r:      csp.R.ds.Rect,
-		c:      0}}
+		North: csp.R.north,
+		South: csp.R.south,
+		Rect:  csp.R.north.Rect,
+		c:     0}}
 	csp.G.cells = []*cell{&cell{
-		Source: csp.G.ds,
-		r:      csp.G.ds.Rect,
-		c:      0}}
+		North: csp.G.north,
+		South: csp.G.south,
+		Rect:  csp.G.north.Rect,
+		c:     0}}
 	csp.B.cells = []*cell{&cell{
-		Source: csp.B.ds,
-		r:      csp.B.ds.Rect,
-		c:      0}}
+		North: csp.B.north,
+		South: csp.B.south,
+		Rect:  csp.B.north.Rect,
+		c:     0}}
 	csp.A.cells = []*cell{&cell{
-		Source: csp.A.ds,
-		r:      csp.A.ds.Rect,
-		c:      0}}
+		North: csp.A.north,
+		South: csp.A.south,
+		Rect:  csp.A.north.Rect,
+		c:     0}}
 	return
 }
 
@@ -381,8 +390,8 @@ func (csp *colorsplitmap) To(img *image.RGBA) {
 		_ = <-waitchan
 		go func(c *cell) {
 			c.CalcC()
-			for y := c.r.Min.Y; y < c.r.Max.Y; y++ {
-				for x := c.r.Min.X; x < c.r.Max.X; x++ {
+			for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
+				for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 					img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4] = uint8(c.c >> 8)
 				}
 			}
@@ -393,8 +402,8 @@ func (csp *colorsplitmap) To(img *image.RGBA) {
 		_ = <-waitchan
 		go func(c *cell) {
 			c.CalcC()
-			for y := c.r.Min.Y; y < c.r.Max.Y; y++ {
-				for x := c.r.Min.X; x < c.r.Max.X; x++ {
+			for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
+				for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 					img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4+1] = uint8(c.c >> 8)
 				}
 			}
@@ -405,8 +414,8 @@ func (csp *colorsplitmap) To(img *image.RGBA) {
 		_ = <-waitchan
 		go func(c *cell) {
 			c.CalcC()
-			for y := c.r.Min.Y; y < c.r.Max.Y; y++ {
-				for x := c.r.Min.X; x < c.r.Max.X; x++ {
+			for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
+				for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 					img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4+2] = uint8(c.c >> 8)
 				}
 			}
@@ -417,8 +426,8 @@ func (csp *colorsplitmap) To(img *image.RGBA) {
 		_ = <-waitchan
 		go func(c *cell) {
 			c.CalcC()
-			for y := c.r.Min.Y; y < c.r.Max.Y; y++ {
-				for x := c.r.Min.X; x < c.r.Max.X; x++ {
+			for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
+				for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 					img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4+3] = uint8(c.c >> 8)
 				}
 			}

@@ -10,7 +10,7 @@ import (
 	"image"
 	"image/color"
 	"math"
-	"runtime"
+	//"runtime"
 )
 
 type cell struct {
@@ -177,7 +177,7 @@ func (wd *WDMap) SplitCells(n int) {
 
 	// Try to avoid the heap from growing too much, because of
 	// GC issues on 32 bit systems (bit cargo-cultish, I know)
-	runtime.GC()
+	//runtime.GC()
 }
 
 func (wd *WDMap) makeMasks(idx int, ch chan *dipole) {
