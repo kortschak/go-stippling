@@ -41,9 +41,12 @@ func main() {
 				}
 			}
 		}
+		if sp == nil {
+			log.Fatalf("Empty cube - ending program")
+		}
 
 		fmt.Printf("\nSplitting cells.\n")
-		for i := uint(0); i < util.Generations; i++ {
+		for i := 0; i < util.Generations; i++ {
 			sp.Split()
 			fmt.Printf("Generation: %v\tCells: %v\n", i, len(sp.cells))
 		}
@@ -104,7 +107,8 @@ func main() {
 		}
 
 		fmt.Printf("\nSplitting cells.\n")
-		for i := uint(0); i < util.Generations; i++ {
+
+		for i := 0; i < util.GenerationsR; i++ {
 			sp.Split()
 			fmt.Printf("Generation: %v\tRed cells: %v\n", i, len(sp.cells))
 		}
@@ -130,7 +134,7 @@ func main() {
 		}
 
 		fmt.Printf("\nSplitting cells.\n")
-		for i := uint(0); i < util.Generations; i++ {
+		for i := 0; i < util.GenerationsG; i++ {
 			sp.Split()
 			fmt.Printf("Generation: %v\tGreen cells: %v\n", i, len(sp.cells))
 		}
@@ -155,7 +159,7 @@ func main() {
 		}
 
 		fmt.Printf("\nSplitting cells.\n")
-		for i := uint(0); i < util.Generations; i++ {
+		for i := 0; i < util.GenerationsB; i++ {
 			sp.Split()
 			fmt.Printf("Generation: %v\tBlue cells: %v\n", i, len(sp.cells))
 		}
