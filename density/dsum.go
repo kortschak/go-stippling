@@ -69,6 +69,210 @@ func (d *DSum) ValueAt(x, y int) (v uint64) {
 	return
 }
 
+func (d *DSum) NegValueAt(x, y int) (v uint64) {
+	if (image.Point{x, y}.In(d.Rect)) {
+		i := d.DVOffSet(x, y)
+		v = uint64(x+1-d.Rect.Min.X)*uint64(y+1-d.Rect.Min.Y)*0xFFFF - d.Values[i]
+	}
+	return
+}
+
+// Given a Rectangle, finds x closest to line dividing
+// the mass of the area bound by these coordinates in half.
+func (ds *DSum) FindCx(r image.Rectangle) int {
+	r = ds.Rect.Intersect(r)
+	xmin := r.Min.X
+	xmax := r.Max.X
+	r = r.Sub(image.Point{1, 1})
+	x := (xmax + xmin + 1) / 2
+	xmaxymax := ds.ValueAt(r.Max.X, r.Max.Y)
+	xminymin := ds.ValueAt(r.Min.X, r.Min.Y)
+	xminymax := ds.ValueAt(r.Min.X, r.Max.Y)
+	xmaxymin := ds.ValueAt(r.Max.X, r.Min.Y)
+	for {
+		// The centre of mass is probably not a round number,
+		// so we aim to iterate only to the margin of 1 pixel
+		if xmax-xmin > 1 {
+			cxymin := ds.ValueAt(x, r.Min.Y)
+			cxymax := ds.ValueAt(x, r.Max.Y)
+			lmass := cxymax - cxymin - xminymax + xminymin
+			rmass := xmaxymax - cxymax - xmaxymin + cxymin
+			if lmass < rmass {
+				xmin = x
+				x = (x + xmax + 1) / 2
+			} else {
+				xmax = x
+				x = (x + xmin + 1) / 2
+			}
+		} else {
+			// Round down to whichever side differs the least from total mass
+			// Note that lmass and rmass are guaranteed to be smaller than total mass
+			cxymin := ds.ValueAt(xmin, r.Min.Y)
+			cxymax := ds.ValueAt(xmin, r.Max.Y)
+			lmass := cxymax - cxymin - xminymax + xminymin
+			cxymin = ds.ValueAt(xmax, r.Min.Y)
+			cxymax = ds.ValueAt(xmax, r.Max.Y)
+			rmass := xmaxymax - cxymax - xmaxymin + cxymin
+			//			tmass := (xmaxymaxzmax - xmaxyminzmax - xminymaxzmax + xminyminzmax) -
+			//				(xmaxymaxzmin - xmaxyminzmin - xminymaxzmin + xminyminzmin)
+			if lmass > rmass {
+				x = xmin
+			} else {
+				x = xmax
+			}
+			break
+		}
+	}
+	return x
+}
+
+// Given a Rectangle, finds y closest to line dividing
+// the mass of the area bound by these coordinates in half.
+func (ds *DSum) FindCy(r image.Rectangle) int {
+	r = ds.Rect.Intersect(r)
+	ymin := r.Min.Y
+	ymax := r.Max.Y
+	r = r.Sub(image.Point{1, 1})
+	y := (ymax + ymin + 1) / 2
+	xmaxymax := ds.ValueAt(r.Max.X, r.Max.Y)
+	xminymin := ds.ValueAt(r.Min.X, r.Min.Y)
+	xminymax := ds.ValueAt(r.Min.X, r.Max.Y)
+	xmaxymin := ds.ValueAt(r.Max.X, r.Min.Y)
+	for {
+		// The centre of mass is probably not a round number,
+		// so we aim to iterate only to the margin of 1 pixel
+		if ymax-ymin > 1 {
+			xmincy := ds.ValueAt(r.Min.X, y)
+			xmaxcy := ds.ValueAt(r.Max.X, y)
+			tmass := xmaxcy - xmincy - xmaxymin + xminymin
+			dmass := xmaxymax - xminymax - xmaxcy + xmincy
+			if tmass < dmass {
+				ymin = y
+				y = (y + ymax + 1) / 2
+			} else {
+				ymax = y
+				y = (y + ymin + 1) / 2
+			}
+		} else {
+			// Round down to whichever side differs the least from total mass
+			// Note that lmass and rmass are guaranteed to be smaller than total mass
+			xmincy := ds.ValueAt(r.Min.X, ymin)
+			xmaxcy := ds.ValueAt(r.Max.X, ymin)
+			tmass := xmaxcy - xmincy - xmaxymin + xminymin
+			xmincy = ds.ValueAt(r.Min.X, ymax)
+			xmaxcy = ds.ValueAt(r.Max.X, ymax)
+			dmass := xmaxymax - xminymax - xmaxcy + xmincy
+			//			tmass := (xmaxymaxzmax - xmaxyminzmax - xminymaxzmax + xminyminzmax) -
+			//				(xmaxymaxzmin - xmaxyminzmin - xminymaxzmin + xminyminzmin)
+			if tmass > dmass {
+				y = ymin
+			} else {
+				y = ymax
+			}
+			break
+		}
+	}
+	return y
+}
+
+// Given a Rectangle, finds x closest to line dividing
+// the negative mass of the area bound by these coordinates in half.
+func (ds *DSum) FindNegCx(r image.Rectangle) int {
+	r = ds.Rect.Intersect(r)
+	xmin := r.Min.X
+	xmax := r.Max.X
+	r = r.Sub(image.Point{1, 1})
+	x := (xmax + xmin + 1) / 2
+	xmaxymax := ds.NegValueAt(r.Max.X, r.Max.Y)
+	xminymin := ds.NegValueAt(r.Min.X, r.Min.Y)
+	xminymax := ds.NegValueAt(r.Min.X, r.Max.Y)
+	xmaxymin := ds.NegValueAt(r.Max.X, r.Min.Y)
+	for {
+		// The centre of mass is probably not a round number,
+		// so we aim to iterate only to the margin of 1 pixel
+		if xmax-xmin > 1 {
+			cxymin := ds.NegValueAt(x, r.Min.Y)
+			cxymax := ds.NegValueAt(x, r.Max.Y)
+			lmass := cxymax - cxymin - xminymax + xminymin
+			rmass := xmaxymax - cxymax - xmaxymin + cxymin
+			if lmass < rmass {
+				xmin = x
+				x = (x + xmax + 1) / 2
+			} else {
+				xmax = x
+				x = (x + xmin + 1) / 2
+			}
+		} else {
+			// Round down to whichever side differs the least from total mass
+			// Note that lmass and rmass are guaranteed to be smaller than total mass
+			cxymin := ds.NegValueAt(xmin, r.Min.Y)
+			cxymax := ds.NegValueAt(xmin, r.Max.Y)
+			lmass := cxymax - cxymin - xminymax + xminymin
+			cxymin = ds.NegValueAt(xmax, r.Min.Y)
+			cxymax = ds.NegValueAt(xmax, r.Max.Y)
+			rmass := xmaxymax - cxymax - xmaxymin + cxymin
+			//			tmass := (xmaxymaxzmax - xmaxyminzmax - xminymaxzmax + xminyminzmax) -
+			//				(xmaxymaxzmin - xmaxyminzmin - xminymaxzmin + xminyminzmin)
+			if lmass > rmass {
+				x = xmin
+			} else {
+				x = xmax
+			}
+			break
+		}
+	}
+	return x
+}
+
+// Given a Rectangle, finds y closest to line dividing
+// the negative mass of the area bound by these coordinates in half.
+func (ds *DSum) FindNegCy(r image.Rectangle) int {
+	r = ds.Rect.Intersect(r)
+	ymin := r.Min.Y
+	ymax := r.Max.Y
+	r = r.Sub(image.Point{1, 1})
+	y := (ymax + ymin + 1) / 2
+	xmaxymax := ds.NegValueAt(r.Max.X, r.Max.Y)
+	xminymin := ds.NegValueAt(r.Min.X, r.Min.Y)
+	xminymax := ds.NegValueAt(r.Min.X, r.Max.Y)
+	xmaxymin := ds.NegValueAt(r.Max.X, r.Min.Y)
+	for {
+		// The centre of mass is probably not a round number,
+		// so we aim to iterate only to the margin of 1 pixel
+		if ymax-ymin > 1 {
+			xmincy := ds.NegValueAt(r.Min.X, y)
+			xmaxcy := ds.NegValueAt(r.Max.X, y)
+			tmass := xmaxcy - xmincy - xmaxymin + xminymin
+			dmass := xmaxymax - xminymax - xmaxcy + xmincy
+			if tmass < dmass {
+				ymin = y
+				y = (y + ymax + 1) / 2
+			} else {
+				ymax = y
+				y = (y + ymin + 1) / 2
+			}
+		} else {
+			// Round down to whichever side differs the least from total mass
+			// Note that lmass and rmass are guaranteed to be smaller than total mass
+			xmincy := ds.NegValueAt(r.Min.X, ymin)
+			xmaxcy := ds.NegValueAt(r.Max.X, ymin)
+			tmass := xmaxcy - xmincy - xmaxymin + xminymin
+			xmincy = ds.NegValueAt(r.Min.X, ymax)
+			xmaxcy = ds.NegValueAt(r.Max.X, ymax)
+			dmass := xmaxymax - xminymax - xmaxcy + xmincy
+			//			tmass := (xmaxymaxzmax - xmaxyminzmax - xminymaxzmax + xminyminzmax) -
+			//				(xmaxymaxzmin - xmaxyminzmin - xminymaxzmin + xminyminzmin)
+			if tmass > dmass {
+				y = ymin
+			} else {
+				y = ymax
+			}
+			break
+		}
+	}
+	return y
+}
+
 // Note that when you set a value at (x,y), the entire
 // area covered from (x,y) to the bottom right has to
 // be updated. In other words: very slow operation
@@ -77,6 +281,7 @@ func (d *DSum) Set(x, y int, v uint16) {
 		return
 	}
 	// First, convert to the delta of the value at (x,y)
+	// Did I mention I love Go's rules for rollover?
 	var dv uint64
 	dv = uint64(v) - d.ValueAt(x, y) - d.ValueAt(x-1, y-1) + d.ValueAt(x-1, y) + d.ValueAt(x, y-1)
 
@@ -103,19 +308,19 @@ func NewDSum(r image.Rectangle) DSum {
 	return DSum{Values: dv, Stride: w, Rect: r}
 }
 
-func DSumFrom(i image.Image, d Model) *DSum {
-	r := i.Bounds()
+func DSumFrom(i *image.Image, d Model) *DSum {
+	r := (*i).Bounds()
 	w, h := r.Dx(), r.Dy()
 	dv := make([]uint64, w*h)
 
 	for x, vx := 0, uint64(0); x < w; x++ {
-		vx += uint64(d.Convert(i.At(x+r.Min.X, r.Min.Y)))
+		vx += uint64(d.Convert((*i).At(x+r.Min.X, r.Min.Y)))
 		dv[x] = vx
 	}
 
 	for y := 1; y < h; y++ {
 		for x, vx := 0, uint64(0); x < w; x++ {
-			vx += uint64(d.Convert((i.At(x+r.Min.X, y+r.Min.Y))))
+			vx += uint64(d.Convert(((*i).At(x+r.Min.X, y+r.Min.Y))))
 			dv[x+y*w] = vx + dv[x+(y-1)*w]
 		}
 	}

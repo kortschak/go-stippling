@@ -8,135 +8,85 @@ package main
 
 import (
 	"code.google.com/p/go-stippling/density"
-	"flag"
-	//"fmt"
+	"code.google.com/p/go-stippling/examples/util"
+	"code.google.com/p/intmath/intgr"
+	"fmt"
 	"image"
-	"image/jpeg"
-	"image/png"
-	"log"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strconv"
-)
-
-const (
-	maxGoRoutines = 256 //Arbitrarily chosen
 )
 
 func main() {
+	util.Init()
+	files := util.ListFiles()
 
-	var outputName = flag.String("o", "output", "\t\tName of the (o)utput (no extension)")
-	var outputExt = flag.Uint("e", 1, "\t\tOutput (e)xtension type:\n\t\t\t 1 \t png (default)\n\t\t\t 2 \t jpg")
-	var jpgQuality = flag.Int("q", 90, "\t\tJPG output (q)uality")
-	var generations = flag.Uint("g", 3, "\t\tNumber of (g)enerations")
-	var saveAll = flag.Bool("s", true, "\t\t(s)ave all generations (default) - only save last generation if false")
-	var numCores = flag.Int("c", 1, "\t\tMax number of (c)ores to be used.\n\t\t\tUse all available cores if less or equal to zero")
-	var mono = flag.Bool("mono", true, "\t\tMonochrome or colour output")
-	flag.Parse()
+	if util.Mono {
+		for filenum, fileName := range files {
+			if util.Verbose {
+				fmt.Printf("\nLoading file %s\n", fileName)
+			}
+			if img, err := util.FileToImage(fileName); err == nil {
+				sp := SPFrom(img)
+				imgout := image.NewGray16(sp.ds.Rect)
 
-	if *numCores <= 0 || *numCores > runtime.NumCPU() {
-		runtime.GOMAXPROCS(runtime.NumCPU())
+				if util.Verbose {
+					fmt.Printf("\nSplitting Cells.\n")
+				}
+				for i := 0; i < util.Generations; i++ {
+					if util.SaveAll {
+						sp.To(imgout)
+						util.ImgToFile(imgout, i, filenum)
+					}
+					sp.Split()
+					if util.Verbose {
+						fmt.Printf("Generation: %v\tCells: %v\n", i, len(sp.cells))
+					}
+				}
+				sp.To(imgout)
+				util.ImgToFile(imgout, util.Generations, filenum)
+			}
+		}
 	} else {
-		runtime.GOMAXPROCS(*numCores)
-	}
-
-	// Use a function variable for processing the files, so that defer
-	// gets called for closing the files without having to pass all of
-	// the variables. This admittedly feels dirty, but it works.
-	var fileNum int
-
-	name := func(g uint) string {
-		num := ""
-		// I highly doubt anyone would try to go beyond 99 generations,
-		// as that would generate over 2^99 cells.
-		if g%10 == g {
-			num = num + "0"
-		}
-		num = num + strconv.Itoa(int(g))
-
-		splitName := *outputName + "-" + num + "-" + strconv.Itoa(fileNum)
-		switch *outputExt {
-		case 1:
-			splitName = splitName + ".png"
-		case 2:
-			splitName = splitName + ".jpg"
-		}
-		return splitName
-	}
-
-	processFiles := func(fileName string) error {
-		file, err := os.Open(fileName)
-		if err != nil {
-			log.Println(err)
-			return err
-		}
-		defer file.Close()
-
-		img, _, err := image.Decode(file)
-		if err != nil {
-			log.Println(err, "Could not decode image:", fileName)
-			return nil
-		}
-		toFile := func(i image.Image, outputname string) {
-
-			output, err := os.Create(outputname)
-			if err != nil {
-				log.Fatal(err)
+		for filenum, fileName := range files {
+			if util.Verbose {
+				fmt.Printf("\nLoading file %s\n", fileName)
 			}
-			defer output.Close()
+			if img, err := util.FileToImage(fileName); err == nil {
+				csp := CSPFrom(img)
+				imgout := image.NewRGBA(csp.R.ds.Rect)
 
-			switch *outputExt {
-			case 1:
-				png.Encode(output, i)
-			case 2:
-				jpeg.Encode(output, i, &jpeg.Options{*jpgQuality})
-			}
-		}
-
-		if *mono {
-			sp := SPFrom(img)
-			imgout := image.NewGray16(sp.ds.Rect)
-			for i := uint(0); uint(i) < *generations; i++ {
-				if *saveAll {
-					sp.To(imgout)
-					toFile(imgout, name(i))
+				if util.Verbose {
+					fmt.Printf("\nSplitting Cells.\n")
 				}
-				sp.Split()
-			}
-			sp.To(imgout)
-			toFile(imgout, name(*generations))
-		} else {
-			csp := CSPFrom(img)
-			imgout := image.NewRGBA(csp.R.ds.Rect)
-			for i := uint(0); uint(i) < *generations; i++ {
-				if *saveAll {
-					csp.To(imgout)
-					toFile(imgout, name(i))
+				for i := 0; i < util.Generations; i++ {
+					if util.SaveAll {
+						csp.To(imgout)
+						util.ImgToFile(imgout,
+							intgr.Min(i, util.GenerationR), intgr.Min(i, util.GenerationG),
+							intgr.Min(i, util.GenerationB), intgr.Min(i, util.GenerationA),
+							filenum)
+					}
+					if i < util.GenerationsR {
+						csp.R.Split()
+					}
+					if i < util.GenerationsG {
+						csp.G.Split()
+					}
+					if i < util.GenerationsB {
+						csp.B.Split()
+					}
+					if i < util.GenerationsA {
+						csp.A.Split()
+					}
+					if util.Verbose {
+						fmt.Printf("Generation: %v\t Red Cells: %v\t Green Cells: %v\t Blue Cells: %v\t Alpha Cells: %v\n", i, len(csp.R.cells), len(csp.G.cells), len(csp.B.cells), len(csp.A.cells))
+					}
 				}
-				csp.Split()
+				csp.To(imgout)
+				util.ImgToFile(imgout,
+					intgr.Min(util.Generations, util.GenerationR), intgr.Min(util.Generations, util.GenerationG),
+					intgr.Min(util.Generations, util.GenerationB), intgr.Min(util.Generations, util.GenerationA),
+					filenum)
 			}
-			csp.To(imgout)
-			toFile(imgout, name(*generations))
 		}
-		fileNum++
-		return nil
-	}
-
-	files := []string{}
-	listFiles := func(path string, f os.FileInfo, err error) error {
-		files = append(files, path)
-		return nil
-	}
-
-	root := flag.Arg(0)
-	err := filepath.Walk(root, listFiles)
-	if err != nil {
-		log.Printf("filepath.Walk() returned %v\n", err)
-	}
-
-	for _, file := range files {
-		processFiles(file)
 	}
 }
 
@@ -158,90 +108,6 @@ func (c *cell) CalcC() {
 	}
 }
 
-// Given a DSum and a Rectangle, finds x closest to line
-// dividing mass in half.
-// Does not do bounds checking - assumes r is inside ds.Rect
-func findcx(ds *density.DSum, r image.Rectangle) int {
-	xmin := r.Min.X
-	xmax := r.Max.X
-	x := (xmax + xmin) / 2
-	vxmaxymax := ds.ValueAt(r.Max.X-1, r.Max.Y-1)
-	vxminymin := ds.ValueAt(r.Min.X-1, r.Min.Y-1)
-	vxminymax := ds.ValueAt(r.Min.X-1, r.Max.Y-1)
-	vxmaxymin := ds.ValueAt(r.Max.X-1, r.Min.Y-1)
-	for {
-		// The centre of mass is probably not a round number,
-		// so we aim to iterate only to the margin of 1 pixel
-		if xmax-xmin > 1 {
-			vcxup := ds.ValueAt(x, r.Min.Y-1)
-			vcxdown := ds.ValueAt(x, r.Max.Y-1)
-			lmass := vcxdown - vcxup - vxminymax + vxminymin
-			rmass := vxmaxymax - vcxdown - vxmaxymin + vcxup
-			if lmass < rmass {
-				xmin = x
-				x = (x + xmax) / 2
-			} else {
-				xmax = x
-				x = (x + xmin) / 2
-			}
-		} else {
-			// Round down to whichever side differs the least from total mass
-			// Note that lmass and rmass are guaranteed to be smaller than total mass
-			lmass := (ds.ValueAt(xmin, r.Max.Y-1) - ds.ValueAt(xmin, r.Min.Y-1) - vxminymax + vxminymin) * 2
-			rmass := (vxmaxymax - ds.ValueAt(xmax, r.Max.Y-1) - vxmaxymin + ds.ValueAt(xmax, r.Min.Y-1)) * 2
-			tmass := vxmaxymax - vxmaxymin - vxminymax + vxminymin
-			if (tmass - lmass) < (tmass - rmass) {
-				return xmin
-			} else {
-				return xmax
-			}
-		}
-	}
-	return x //should never be reached
-}
-
-// Given a DSum and a Rectangle, finds y closest to line
-// dividing mass in half.
-// Does not do bounds checking - assumes r is inside ds.Rect
-func findcy(ds *density.DSum, r image.Rectangle) int {
-	ymin := r.Min.Y
-	ymax := r.Max.Y
-	y := (ymax + ymin) / 2
-	vxmaxymax := ds.ValueAt(r.Max.X-1, r.Max.Y-1)
-	vxminymin := ds.ValueAt(r.Min.X-1, r.Min.Y-1)
-	vxminymax := ds.ValueAt(r.Min.X-1, r.Max.Y-1)
-	vxmaxymin := ds.ValueAt(r.Max.X-1, r.Min.Y-1)
-	for {
-		// The centre of mass is probably not a round number,
-		// so iterate to the margin of 1 pixel
-		if ymax-ymin > 1 {
-			vcyleft := ds.ValueAt(r.Min.X-1, y)
-			vcyright := ds.ValueAt(r.Max.X-1, y)
-			upmass := vcyright - vcyleft - vxmaxymin + vxminymin
-			downmass := vxmaxymax - vcyright - vxminymax + vcyleft
-			if upmass < downmass {
-				ymin = y
-				y = (y + ymax) / 2
-			} else {
-				ymax = y
-				y = (y + ymin) / 2
-			}
-		} else {
-			// Round down to whichever side differs the least from total mass
-			// Note that lmass and rmass are guaranteed to be smaller than total mass
-			upmass := ds.ValueAt(r.Max.X-1, ymin) - ds.ValueAt(r.Min.X-1, ymin) - vxmaxymin + vxminymin
-			downmass := vxmaxymax - ds.ValueAt(r.Max.X-1, ymax) - vxminymax + ds.ValueAt(r.Min.X-1, ymax)
-			tmass := vxmaxymax - vxmaxymin - vxminymax + vxminymin
-			if (tmass - upmass) < (tmass - downmass) {
-				return ymin
-			} else {
-				return ymax
-			}
-		}
-	}
-	return y //should never be reached
-}
-
 // Splits current cell - modifies itself to keep half of
 // the current mass of the cell, returns other half as new cell
 func (c *cell) Split() (child *cell) {
@@ -252,12 +118,12 @@ func (c *cell) Split() (child *cell) {
 		c:      0,
 	}
 
-	if c.r.Dx() > c.r.Dy() {
-		x := findcx(c.Source, c.r)
+	if util.Xweight*c.r.Dx() > util.Yweight*c.r.Dy() {
+		x := c.Source.FindCx(c.r)
 		c.r.Max.X = x
 		child.r.Min.X = x
 	} else {
-		y := findcy(c.Source, c.r)
+		y := c.Source.FindCy(c.r)
 		c.r.Max.Y = y
 		child.r.Min.Y = y
 	}
@@ -273,9 +139,9 @@ func (sp *splitmap) Split() {
 	sp.cells = append(sp.cells, sp.cells...)
 	oldcells := sp.cells[:len(sp.cells)/2]
 	newcells := sp.cells[len(sp.cells)/2:]
-	waitchan := make(chan int, maxGoRoutines)
+	waitchan := make(chan int, util.MaxGoroutines)
 
-	for i := 0; i < maxGoRoutines; i++ {
+	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
 	for i, c := range oldcells {
@@ -285,7 +151,7 @@ func (sp *splitmap) Split() {
 			waitchan <- 1
 		}(i, c)
 	}
-	for i := 0; i < maxGoRoutines; i++ {
+	for i := 0; i < util.MaxGoroutines; i++ {
 		_ = <-waitchan
 	}
 	/*
@@ -299,8 +165,8 @@ func (sp *splitmap) Split() {
 }
 
 func (sp *splitmap) To(img *image.Gray16) {
-	waitchan := make(chan int, maxGoRoutines)
-	for i := 0; i < maxGoRoutines; i++ {
+	waitchan := make(chan int, util.MaxGoroutines)
+	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
 	for _, c := range sp.cells {
@@ -319,13 +185,13 @@ func (sp *splitmap) To(img *image.Gray16) {
 		}(c)
 
 	}
-	for i := 0; i < maxGoRoutines; i++ {
+	for i := 0; i < util.MaxGoroutines; i++ {
 		_ = <-waitchan
 	}
 	return
 }
 
-func SPFrom(img image.Image) (sp *splitmap) {
+func SPFrom(img *image.Image) (sp *splitmap) {
 	sp = new(splitmap)
 	sp.ds = density.DSumFrom(img, density.AvgDensity)
 	sp.cells = []*cell{&cell{
@@ -346,7 +212,7 @@ func (csp *colorsplitmap) Split() {
 	csp.A.Split()
 }
 
-func CSPFrom(img image.Image) (csp *colorsplitmap) {
+func CSPFrom(img *image.Image) (csp *colorsplitmap) {
 	csp = new(colorsplitmap)
 	csp.R.ds = density.DSumFrom(img, density.RedDensity)
 	csp.G.ds = density.DSumFrom(img, density.GreenDensity)
@@ -373,8 +239,8 @@ func CSPFrom(img image.Image) (csp *colorsplitmap) {
 }
 
 func (csp *colorsplitmap) To(img *image.RGBA) {
-	waitchan := make(chan int, maxGoRoutines)
-	for i := 0; i < maxGoRoutines; i++ {
+	waitchan := make(chan int, util.MaxGoroutines)
+	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
 	for _, c := range csp.R.cells {
@@ -425,7 +291,7 @@ func (csp *colorsplitmap) To(img *image.RGBA) {
 			waitchan <- 1
 		}(c)
 	}
-	for i := 0; i < maxGoRoutines; i++ {
+	for i := 0; i < util.MaxGoroutines; i++ {
 		_ = <-waitchan
 	}
 	return

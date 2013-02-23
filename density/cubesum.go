@@ -71,13 +71,13 @@ func (cbs *CubeSum) ValueAt(x, y, z int) (v uint64) {
 func (cbs *CubeSum) NegValueAt(x, y, z int) (v uint64) {
 	if (image.Point{x, y}.In(cbs.Rect)) && z >= 0 && z < cbs.LenZ {
 		i := cbs.DVOffSet(x, y, z)
-		v = uint64(cbs.Rect.Min.X*x)*uint64(cbs.Rect.Min.Y*y)*uint64(z)*0xFFFF - cbs.Values[i]
+		v = uint64(x+1-cbs.Rect.Min.X)*uint64(y+1-cbs.Rect.Min.Y)*uint64(z+1)*0xFFFF - cbs.Values[i]
 	}
 	return
 }
 
-// Sums the cube r from r.Min up to but not including r.Max
-func (cbs *CubeSum) Sum(r image.Rectangle, zmin, zmax int) uint64 {
+// Sums the volume defined by the rectangle and zmin-zmax. Inclusive min, exclusive max (like image.Rectangle)
+func (cbs *CubeSum) VolumeSum(r image.Rectangle, zmin, zmax int) uint64 {
 	r = r.Intersect(cbs.Rect).Sub(image.Point{1, 1})
 	if zmax >= cbs.LenZ {
 		zmax = cbs.LenZ - 1
@@ -93,7 +93,7 @@ func (cbs *CubeSum) Sum(r image.Rectangle, zmin, zmax int) uint64 {
 }
 
 // Like Sum, but gives the value of (volume*0xFFFF - Sum) - the negative space, essentially
-func (cbs *CubeSum) NegSum(r image.Rectangle, zmin, zmax int) uint64 {
+func (cbs *CubeSum) NegVolumeSum(r image.Rectangle, zmin, zmax int) uint64 {
 	r = r.Intersect(cbs.Rect).Sub(image.Point{1, 1})
 	if zmax >= cbs.LenZ {
 		zmax = cbs.LenZ - 1

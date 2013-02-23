@@ -25,16 +25,21 @@ var (
 	generationsr  *int    //flag.Int("gr", -1, "\t\tNumber of red generations - superseded by -g if negative")
 	generationsg  *int    //flag.Int("gg", -1, "\t\tNumber of green generations - superseded by -g if negative")
 	generationsb  *int    //flag.Int("gb", -1, "\t\tNumber of blue generations - superseded by -g if negative")
+	generationsa  *int    //flag.Int("ga", -1, "\t\tNumber of alpha generations - superseded by -g if negative")
+	saveAll       *bool   //flag.Bool("s", true, "\t\t(s)ave all generations (default) - only save last generation if false")
 	xweight       *int    //flag.Int("x", 1, "\t\tRelative weight of (x) axis")
 	yweight       *int    //flag.Int("y", 1, "\t\tRelative weight of (y) axis")
 	zweight       *int    //flag.Int("z", 1, "\t\tRelative weight of (z) axis")
 	numCores      *int    //flag.Int("c", 1, "\t\tMax number of (c)ores to be used.\n\t\t\tUse all available cores if less or equal to zero")
 	mono          *bool   //flag.Bool("mono", true, "\t\tMonochrome or colour output")
 	maxGoroutines *int
+	verbose       *bool
 
 	//Exported
-	Generations, GenerationsR  int
-	GenerationsG, GenerationsB int
+	Generations                int
+	GenerationsR, GenerationsG int
+	GenerationsB, GenerationsA int
+	SaveAll, Verbose           bool
 	Xweight, Yweight, Zweight  int
 	NumCores                   int
 	Mono                       bool
@@ -49,11 +54,14 @@ func init() {
 	generationsr = flag.Int("gr", -1, "\t\tNumber of red generations - superseded by -g if negative")
 	generationsg = flag.Int("gg", -1, "\t\tNumber of green generations - superseded by -g if negative")
 	generationsb = flag.Int("gb", -1, "\t\tNumber of blue generations - superseded by -g if negative")
+	generationsa = flag.Int("ga", 0, "\t\tNumber of blue generations - superseded by -g if negative")
+	saveAll = flag.Bool("s", true, "\t\t(s)ave all generations (default) - only save last generation if false")
 	xweight = flag.Int("x", 1, "\t\tRelative weight of (x) axis")
 	yweight = flag.Int("y", 1, "\t\tRelative weight of (y) axis")
 	zweight = flag.Int("z", 1, "\t\tRelative weight of (z) axis")
 	numCores = flag.Int("c", 1, "\t\tMax number of (c)ores to be used.\n\t\t\tUse all available cores if less or equal to zero")
 	mono = flag.Bool("mono", true, "\t\tMonochrome or colour output")
+	verbose = flag.Bool("v", false, "\t\tVerbose output")
 	maxGoroutines = flag.Int("mg", 256, "\t\tMaximum number of goroutines when splitting cells")
 }
 
@@ -71,6 +79,12 @@ func Init() {
 	if GenerationsB = *generationsb; GenerationsB < 0 {
 		GenerationsB = Generations
 	}
+	if GenerationsA = *generationsa; GenerationsA < 0 {
+		GenerationsA = Generations
+	}
+	Generations = intgr.Max(intgr.Max(intgr.Max(Generations, GenerationsA), intgr.Max(GenerationsR, GenerationsG)), GenerationsB)
+	SaveAll = *saveAll
+	Verbose = *verbose
 	Xweight = intgr.Max(0, *xweight)
 	Yweight = intgr.Max(0, *yweight)
 	Zweight = intgr.Max(0, *zweight)
@@ -95,7 +109,7 @@ func ListFiles() []string {
 		return nil
 	}
 	err := filepath.Walk(flag.Arg(0), list)
-	if err != nil {
+	if err != nil && Verbose {
 		log.Printf("filepath.Walk() returned %v\n", err)
 	}
 	return files
@@ -104,20 +118,22 @@ func ListFiles() []string {
 func FileToImage(fileName string) (img *image.Image, err error) {
 	file, err := os.Open(fileName)
 	if err != nil {
-		log.Println(err)
+		if Verbose {
+			log.Println(err)
+		}
 		return nil, err
 	}
 	defer file.Close()
 
 	image, _, err := image.Decode(file)
-	if err != nil {
+	if err != nil && Verbose {
 		log.Println(err, "Could not decode image:", fileName)
 	}
 	return &image, err
 }
 
-func ImgToFile(img image.Image, i int) {
-	output, err := os.Create(filename(i))
+func ImgToFile(img image.Image, i ...int) {
+	output, err := os.Create(filename(i...))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -131,9 +147,12 @@ func ImgToFile(img image.Image, i int) {
 	}
 }
 
-func filename(frameNum int) string {
+func filename(i ...int) string {
 
-	splitName := *outputName + "-" + strconv.Itoa(frameNum)
+	splitName := *outputName
+	for _, s := range i {
+		splitName = splitName + "-" + strconv.Itoa(s)
+	}
 	switch *outputExt {
 	case 1:
 		splitName = splitName + ".png"

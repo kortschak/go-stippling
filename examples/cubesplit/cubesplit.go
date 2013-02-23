@@ -316,7 +316,7 @@ type cell struct {
 }
 
 func (c *cell) Mass() uint64 {
-	return c.Source.Sum(c.Rect, c.zmin, c.zmax)
+	return c.Source.VolumeSum(c.Rect, c.zmin, c.zmax)
 }
 
 func (c *cell) CalcC() {
