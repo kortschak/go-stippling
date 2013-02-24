@@ -16,78 +16,92 @@ import (
 
 func main() {
 	util.Init()
-	files := util.ListFiles()
-
+	argsList := util.ListFiles()
+	var frameNum int
 	if util.Mono {
-		for filenum, fileName := range files {
-			if util.Verbose {
-				fmt.Printf("\nLoading file %s\n", fileName)
-			}
-			if img, err := util.FileToImage(fileName); err == nil {
-				sp := SPFrom(img)
-				imgout := image.NewGray16(sp.ds.Rect)
-
-				if util.Verbose {
-					fmt.Printf("\nSplitting Cells.\n")
-				}
-				for i := 0; i < util.Generations; i++ {
-					if util.SaveAll {
-						sp.To(imgout)
-						util.ImgToFile(imgout, i, filenum)
-					}
-					sp.Split()
-					if util.Verbose {
-						fmt.Printf("Generation: %v\tCells: %v\n", i, len(sp.cells))
-					}
-				}
-				sp.To(imgout)
-				util.ImgToFile(imgout, util.Generations, filenum)
-			}
+		for _, files := range argsList {
+			frameNum = monoSplit(files, frameNum)
 		}
 	} else {
-		for filenum, fileName := range files {
-			if util.Verbose {
-				fmt.Printf("\nLoading file %s\n", fileName)
-			}
-			if img, err := util.FileToImage(fileName); err == nil {
-				csp := CSPFrom(img)
-				imgout := image.NewRGBA(csp.R.ds.Rect)
-
-				if util.Verbose {
-					fmt.Printf("\nSplitting Cells.\n")
-				}
-				for i := 0; i < util.Generations; i++ {
-					if util.SaveAll {
-						csp.To(imgout)
-						util.ImgToFile(imgout,
-							intgr.Min(i, util.GenerationR), intgr.Min(i, util.GenerationG),
-							intgr.Min(i, util.GenerationB), intgr.Min(i, util.GenerationA),
-							filenum)
-					}
-					if i < util.GenerationsR {
-						csp.R.Split()
-					}
-					if i < util.GenerationsG {
-						csp.G.Split()
-					}
-					if i < util.GenerationsB {
-						csp.B.Split()
-					}
-					if i < util.GenerationsA {
-						csp.A.Split()
-					}
-					if util.Verbose {
-						fmt.Printf("Generation: %v\t Red Cells: %v\t Green Cells: %v\t Blue Cells: %v\t Alpha Cells: %v\n", i, len(csp.R.cells), len(csp.G.cells), len(csp.B.cells), len(csp.A.cells))
-					}
-				}
-				csp.To(imgout)
-				util.ImgToFile(imgout,
-					intgr.Min(util.Generations, util.GenerationR), intgr.Min(util.Generations, util.GenerationG),
-					intgr.Min(util.Generations, util.GenerationB), intgr.Min(util.Generations, util.GenerationA),
-					filenum)
-			}
+		for _, files := range argsList {
+			frameNum = colourSplit(files, frameNum)
 		}
 	}
+}
+
+func monoSplit(files []string, frameNum int) int {
+	for filenum, fileName := range files {
+		if util.Verbose {
+			fmt.Printf("\nLoading file %s\n", fileName)
+		}
+		if img, err := util.FileToImage(fileName); err == nil {
+			sp := SPFrom(img)
+			imgout := image.NewGray16(sp.ds.Rect)
+
+			if util.Verbose {
+				fmt.Printf("\nSplitting Cells.\n")
+			}
+			for i := 0; i < util.Generations; i++ {
+				if util.SaveAll {
+					sp.To(imgout)
+					util.ImgToFile(imgout, i, filenum)
+				}
+				sp.Split()
+				if util.Verbose {
+					fmt.Printf("Generation: %v\tCells: %v\n", i, len(sp.cells))
+				}
+			}
+			sp.To(imgout)
+			util.ImgToFile(imgout, util.Generations, frameNum+filenum)
+		}
+	}
+	return frameNum + len(files)
+}
+
+func colourSplit(files []string, frameNum int) int {
+	for filenum, fileName := range files {
+		if util.Verbose {
+			fmt.Printf("\nLoading file %s\n", fileName)
+		}
+		if img, err := util.FileToImage(fileName); err == nil {
+			csp := CSPFrom(img)
+			imgout := image.NewRGBA(csp.R.ds.Rect)
+
+			if util.Verbose {
+				fmt.Printf("\nSplitting Cells.\n")
+			}
+			for i := 0; i < util.GenerationsR || i < util.GenerationsG || i < util.GenerationsB || i < util.GenerationsA; i++ {
+				if util.SaveAll {
+					csp.To(imgout)
+					util.ImgToFile(imgout,
+						intgr.Min(i, util.GenerationsR), intgr.Min(i, util.GenerationsG),
+						intgr.Min(i, util.GenerationsB), intgr.Min(i, util.GenerationsA),
+						filenum)
+				}
+				if i < util.GenerationsR {
+					csp.R.Split()
+				}
+				if i < util.GenerationsG {
+					csp.G.Split()
+				}
+				if i < util.GenerationsB {
+					csp.B.Split()
+				}
+				if i < util.GenerationsA {
+					csp.A.Split()
+				}
+				if util.Verbose {
+					fmt.Printf("Generation: %v\t Red Cells: %v\t Green Cells: %v\t Blue Cells: %v\t Alpha Cells: %v\n", i, len(csp.R.cells), len(csp.G.cells), len(csp.B.cells), len(csp.A.cells))
+				}
+			}
+			csp.To(imgout)
+			util.ImgToFile(imgout,
+				intgr.Min(util.Generations, util.GenerationsR), intgr.Min(util.Generations, util.GenerationsG),
+				intgr.Min(util.Generations, util.GenerationsB), intgr.Min(util.Generations, util.GenerationsA),
+				filenum+frameNum)
+		}
+	}
+	return frameNum + len(files)
 }
 
 type cell struct {
