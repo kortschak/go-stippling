@@ -103,17 +103,22 @@ func Init() {
 
 }
 
-func ListFiles() []string {
-	files := []string{}
-	list := func(filepath string, f os.FileInfo, err error) error {
-		files = append(files, filepath)
-		return nil
+func ListFiles() [][]string {
+	argList := flag.Args()
+	filesList := make([][]string, len(argList))
+	for i, arg := range argList {
+		files := []string{}
+		list := func(filepath string, f os.FileInfo, err error) error {
+			files = append(files, filepath)
+			return nil
+		}
+		err := filepath.Walk(arg, list)
+		if err != nil && Verbose {
+			log.Printf("filepath.Walk() returned %v\n", err)
+		}
+		filesList[i] = files
 	}
-	err := filepath.Walk(flag.Arg(0), list)
-	if err != nil && Verbose {
-		log.Printf("filepath.Walk() returned %v\n", err)
-	}
-	return files
+	return filesList
 }
 
 func FileToImage(fileName string) (img *image.Image, err error) {

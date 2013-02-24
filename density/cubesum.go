@@ -477,10 +477,10 @@ func (cbs *CubeSum) FindNegCz(r image.Rectangle, MinZ, MaxZ int) int {
 	return z
 }
 
-func NewCubeSum(r image.Rectangle, capz int) CubeSum {
+func NewCubeSum(r image.Rectangle, capz int) *CubeSum {
 	w, h := r.Dx(), r.Dy()
 	dv := make([]uint64, w*h*capz)
-	return CubeSum{Values: dv, Stride: w, Rect: r, LenZ: 0, CapZ: capz}
+	return &CubeSum{Values: dv, Stride: w, Rect: r, LenZ: 0, CapZ: capz}
 }
 
 func CubeSumFrom(i *image.Image, d Model, capz int) *CubeSum {
