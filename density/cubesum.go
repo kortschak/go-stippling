@@ -7,11 +7,11 @@ import (
 
 /*
 CubeSum is similar to DSum, but extends the functionality to
-x, y and z. It allows for comparing accross frames of a movie
-(which can be appended frame by frame). Being a volume it
-obviously consumes a lot of memory, so use with care. Also
-note that there is a risk of overflowing the precomputed
-values if too many frames are stacked in one cube.
+three axes: x, y and z. It allows for comparing accross
+frames of a movie (which can be appended frame by frame).
+Being a volume it obviously consumes a lot of memory, so use
+with care. Also note that there is a risk of overflowing the
+precomputed values if too many frames are stacked in one cube.
 */
 type CubeSum struct {
 	// Values holds the map's density values. The value at (x, y)

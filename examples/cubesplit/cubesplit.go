@@ -1,6 +1,6 @@
 /*
 Like Split, but extends across the Z axis, which normally represents time. Expects a directory full
-of frames of identical size. Splits density in half among longest axis. Repeats for sub-cells for g generations.
+of frames of identical size. Splits density in half among longest axis. Repeats for sub-Cells for g generations.
 Incredibly memory hungry! Keep it low-res, low amount of frames if possible.
 */
 package main
@@ -11,13 +11,8 @@ import (
 	"code.google.com/p/intmath/intgr"
 	"fmt"
 	"image"
-	"image/jpeg"
-	"image/png"
 	"log"
-	"os"
-	"path/filepath"
 	"sort"
-	"strconv"
 )
 
 func main() {
@@ -27,7 +22,7 @@ func main() {
 	files := util.ListFiles()
 
 	if util.Mono {
-		var sp *splitmap
+		var sp *Map
 
 		fmt.Printf("\nFilling the cube with frames.\n")
 		for _, fileName := range files {
@@ -45,16 +40,16 @@ func main() {
 			log.Fatalf("Empty cube - ending program")
 		}
 
-		fmt.Printf("\nSplitting cells.\n")
+		fmt.Printf("\nSplitting Cells.\n")
 		for i := 0; i < util.Generations; i++ {
 			sp.Split()
-			fmt.Printf("Generation: %v\tCells: %v\n", i, len(sp.cells))
+			fmt.Printf("Generation: %v\tCells: %v\n", i, len(sp.Cells))
 		}
 
-		fmt.Printf("\nConverting cells to cellstream.\n")
-		cs := cellstreamFrom(sp)
+		fmt.Printf("\nConverting Cells to Cellstream.\n")
+		cs := CellstreamFrom(sp)
 
-		fmt.Printf("\nConverting cells back to %v frames.\n", sp.source.LenZ)
+		fmt.Printf("\nConverting Cells back to %v frames.\n", sp.source.LenZ)
 
 		imgout := image.NewGray16(sp.source.Rect)
 		waitchan := make(chan int, util.MaxGoroutines)
@@ -65,7 +60,7 @@ func main() {
 			}
 			for c := cs.stream[i]; c.Z == z; {
 				_ = <-waitchan
-				go func(c *streamcell) {
+				go func(c *StreamCell) {
 					for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
 						for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 							j := imgout.PixOffset(x, y)
@@ -91,7 +86,7 @@ func main() {
 		}
 		fmt.Printf("done.")
 	} else {
-		var sp *splitmap
+		var sp *Map
 
 		fmt.Printf("\nFilling the cube with Red channels.\n")
 		for _, fileName := range files {
@@ -106,19 +101,19 @@ func main() {
 			}
 		}
 
-		fmt.Printf("\nSplitting cells.\n")
+		fmt.Printf("\nSplitting Cells.\n")
 
 		for i := 0; i < util.GenerationsR; i++ {
 			sp.Split()
-			fmt.Printf("Generation: %v\tRed cells: %v\n", i, len(sp.cells))
+			fmt.Printf("Generation: %v\tRed Cells: %v\n", i, len(sp.Cells))
 		}
 
-		fmt.Printf("\nConverting Red cells to cellstream.\n")
-		rcs := cellstreamFrom(sp)
+		fmt.Printf("\nConverting Red Cells to Cellstream.\n")
+		rcs := CellstreamFrom(sp)
 
 		fmt.Printf("\nFilling the cube with Green channels.\n")
 		sp.source.LenZ = 0
-		sp.cells = []*cell{&cell{
+		sp.Cells = []*Cell{&Cell{
 			Source: sp.source,
 			Rect:   sp.source.Rect,
 			zmin:   0,
@@ -133,18 +128,18 @@ func main() {
 			}
 		}
 
-		fmt.Printf("\nSplitting cells.\n")
+		fmt.Printf("\nSplitting Cells.\n")
 		for i := 0; i < util.GenerationsG; i++ {
 			sp.Split()
-			fmt.Printf("Generation: %v\tGreen cells: %v\n", i, len(sp.cells))
+			fmt.Printf("Generation: %v\tGreen Cells: %v\n", i, len(sp.Cells))
 		}
 
-		fmt.Printf("\nConverting Green cells to cellstream.\n")
-		gcs := cellstreamFrom(sp)
+		fmt.Printf("\nConverting Green Cells to Cellstream.\n")
+		gcs := CellstreamFrom(sp)
 
 		fmt.Println("\nFilling the cube with frames' Blue channels.\n")
 		sp.source.LenZ = 0
-		sp.cells = []*cell{&cell{
+		sp.Cells = []*Cell{&Cell{
 			Source: sp.source,
 			Rect:   sp.source.Rect,
 			zmin:   0,
@@ -158,22 +153,22 @@ func main() {
 			}
 		}
 
-		fmt.Printf("\nSplitting cells.\n")
+		fmt.Printf("\nSplitting Cells.\n")
 		for i := 0; i < util.GenerationsB; i++ {
 			sp.Split()
-			fmt.Printf("Generation: %v\tBlue cells: %v\n", i, len(sp.cells))
+			fmt.Printf("Generation: %v\tBlue Cells: %v\n", i, len(sp.Cells))
 		}
 
-		fmt.Printf("\nConverting Blue cells to cellstream.\n")
-		bcs := cellstreamFrom(sp)
-		sp.cells = []*cell{&cell{
+		fmt.Printf("\nConverting Blue Cells to Cellstream.\n")
+		bcs := CellstreamFrom(sp)
+		sp.Cells = []*Cell{&Cell{
 			Source: sp.source,
 			Rect:   sp.source.Rect,
 			zmin:   0,
 			zmax:   0,
 			c:      0}}
 
-		fmt.Printf("\nConverting cellstreams back to %v frames.\n", sp.source.LenZ)
+		fmt.Printf("\nConverting Cellstreams back to %v frames.\n", sp.source.LenZ)
 
 		imgout := image.NewRGBA(sp.source.Rect)
 
@@ -189,7 +184,7 @@ func main() {
 			}
 			for c := rcs.stream[r]; c.Z == z; {
 				_ = <-waitchan
-				go func(c *streamcell) {
+				go func(c *StreamCell) {
 					for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
 						for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 							imgout.Pix[(y-imgout.Rect.Min.Y)*imgout.Stride+(x-imgout.Rect.Min.X)*4] = uint8(c.c >> 8)
@@ -207,7 +202,7 @@ func main() {
 
 			for c := gcs.stream[g]; c.Z == z; {
 				_ = <-waitchan
-				go func(c *streamcell) {
+				go func(c *StreamCell) {
 					for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
 						for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 							imgout.Pix[(y-imgout.Rect.Min.Y)*imgout.Stride+(x-imgout.Rect.Min.X)*4+1] = uint8(c.c >> 8)
@@ -225,7 +220,7 @@ func main() {
 
 			for c := bcs.stream[b]; c.Z == z; {
 				_ = <-waitchan
-				go func(c *streamcell) {
+				go func(c *StreamCell) {
 					for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
 						for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 							imgout.Pix[(y-imgout.Rect.Min.Y)*imgout.Stride+(x-imgout.Rect.Min.X)*4+2] = uint8(c.c >> 8)
@@ -252,74 +247,18 @@ func main() {
 	fmt.Printf("\ndone.")
 }
 
-func listFiles(path string) []string {
-	files := []string{}
-	list := func(filepath string, f os.FileInfo, err error) error {
-		files = append(files, filepath)
-		return nil
-	}
-	err := filepath.Walk(path, list)
-	if err != nil {
-		log.Printf("filepath.Walk() returned %v\n", err)
-	}
-	return files
-}
-
-func fileToImage(fileName string) (img *image.Image, err error) {
-	file, err := os.Open(fileName)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	defer file.Close()
-
-	image, _, err := image.Decode(file)
-	if err != nil {
-		log.Println(err, "Could not decode image:", fileName)
-	}
-	return &image, err
-}
-
-func sequence(outputName *string, frameNum int, ext *uint) string {
-
-	splitName := *outputName + "-" + strconv.Itoa(frameNum)
-	switch *ext {
-	case 1:
-		splitName = splitName + ".png"
-	case 2:
-		splitName = splitName + ".jpg"
-	}
-	return splitName
-}
-
-func imgToFile(i image.Image, filename string, ext *uint, jpgQuality *int) {
-
-	output, err := os.Create(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer output.Close()
-
-	switch *ext {
-	case 1:
-		png.Encode(output, i)
-	case 2:
-		jpeg.Encode(output, i, &jpeg.Options{*jpgQuality})
-	}
-}
-
-type cell struct {
+type Cell struct {
 	Source     *density.CubeSum
 	Rect       image.Rectangle
 	zmin, zmax int
 	c          uint16
 }
 
-func (c *cell) Mass() uint64 {
+func (c *Cell) Mass() uint64 {
 	return c.Source.VolumeSum(c.Rect, c.zmin, c.zmax)
 }
 
-func (c *cell) CalcC() {
+func (c *Cell) CalcC() {
 	dx := uint64(c.Rect.Dx())
 	dy := uint64(c.Rect.Dy())
 	dz := uint64(c.zmax - c.zmin)
@@ -332,11 +271,11 @@ func (c *cell) CalcC() {
 	}
 }
 
-// Splits current cell - modifies itself to keep half of
-// the current mass of the cell, returns other half as new cell
-func (c *cell) Split(cellchan chan *cell) int {
+// Splits current Cell - modifies itself to keep half of
+// the current mass of the Cell, returns other half as new Cell
+func (c *Cell) Split(Cellchan chan *Cell) int {
 
-	child := &cell{
+	child := &Cell{
 		Source: c.Source,
 		Rect:   c.Rect,
 		zmax:   c.zmax,
@@ -356,58 +295,58 @@ func (c *cell) Split(cellchan chan *cell) int {
 	if dz >= dx && dz >= dy && dz > util.Zweight {
 		c.zmax = (cz + ncz + 1) / 2
 		child.zmin = (cz + ncz + 1) / 2
-		cellchan <- child
+		Cellchan <- child
 		return 1
 	}
 	if dx >= dy && dx > util.Xweight {
 		c.Rect.Max.X = (cx + ncx + 1) / 2
 		child.Rect.Min.X = (cx + ncx + 1) / 2
-		cellchan <- child
+		Cellchan <- child
 		return 1
 	}
 	if dy > util.Yweight {
 		c.Rect.Max.Y = (cy + ncy + 1) / 2
 		child.Rect.Min.Y = (cy + ncy + 1) / 2
-		cellchan <- child
+		Cellchan <- child
 		return 1
 	}
 	return 0
 }
 
-type splitmap struct {
+type Map struct {
 	source *density.CubeSum
-	cells  []*cell
+	Cells  []*Cell
 }
 
-func (sp *splitmap) Split() {
-	cellchan := make(chan *cell, len(sp.cells)*2)
+func (sp *Map) Split() {
+	Cellchan := make(chan *Cell, len(sp.Cells)*2)
 	waitchan := make(chan int, util.MaxGoroutines)
 
 	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 0
 	}
-	var totalcells int
-	for i, c := range sp.cells {
-		totalcells += <-waitchan
-		go func(i int, c *cell) {
-			waitchan <- c.Split(cellchan)
+	var totalCells int
+	for i, c := range sp.Cells {
+		totalCells += <-waitchan
+		go func(i int, c *Cell) {
+			waitchan <- c.Split(Cellchan)
 		}(i, c)
 	}
 	for i := 0; i < util.MaxGoroutines; i++ {
-		totalcells += <-waitchan
+		totalCells += <-waitchan
 	}
 
-	for i := 0; i < totalcells; i++ {
-		sp.cells = append(sp.cells, <-cellchan)
+	for i := 0; i < totalCells; i++ {
+		sp.Cells = append(sp.Cells, <-Cellchan)
 	}
 
 	return
 }
 
-func SPFrom(img *image.Image, capz int, dm density.Model) (sp *splitmap) {
-	sp = new(splitmap)
+func SPFrom(img *image.Image, capz int, dm density.Model) (sp *Map) {
+	sp = new(Map)
 	sp.source = density.CubeSumFrom(img, dm, capz)
-	sp.cells = []*cell{&cell{
+	sp.Cells = []*Cell{&Cell{
 		Source: sp.source,
 		Rect:   sp.source.Rect,
 		zmin:   0,
@@ -416,22 +355,22 @@ func SPFrom(img *image.Image, capz int, dm density.Model) (sp *splitmap) {
 	return
 }
 
-func (sp *splitmap) AddFrame(i *image.Image, dm density.Model) {
+func (sp *Map) AddFrame(i *image.Image, dm density.Model) {
 	sp.source.AddFrame(i, dm)
-	sp.cells[0].zmax = sp.source.LenZ
+	sp.Cells[0].zmax = sp.source.LenZ
 }
 
-// Alternative ways to write to an image - cellstream is preferred
-func (sp *splitmap) To(img *image.Gray16, frame int) {
+// Alternative ways to write to an image - Cellstream is preferred
+func (sp *Map) To(img *image.Gray16, frame int) {
 	waitchan := make(chan int, util.MaxGoroutines)
 	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
-	for _, c := range sp.cells {
-		// If the cell overlaps with the frame...
+	for _, c := range sp.Cells {
+		// If the Cell overlaps with the frame...
 		if c.zmin <= frame && frame < c.zmax {
 			_ = <-waitchan
-			go func(c *cell) {
+			go func(c *Cell) {
 				for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
 					for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 						i := img.PixOffset(x, y)
@@ -449,15 +388,15 @@ func (sp *splitmap) To(img *image.Gray16, frame int) {
 	return
 }
 
-func (sp *splitmap) ToR(img *image.RGBA, frame int) {
+func (sp *Map) ToR(img *image.RGBA, frame int) {
 	waitchan := make(chan int, util.MaxGoroutines)
 	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
-	for _, c := range sp.cells {
+	for _, c := range sp.Cells {
 		if c.zmin <= frame && frame < c.zmax {
 			_ = <-waitchan
-			go func(c *cell) {
+			go func(c *Cell) {
 				for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
 					for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 						img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4] = uint8(c.c >> 8)
@@ -474,15 +413,15 @@ func (sp *splitmap) ToR(img *image.RGBA, frame int) {
 	return
 }
 
-func (sp *splitmap) ToG(img *image.RGBA, frame int) {
+func (sp *Map) ToG(img *image.RGBA, frame int) {
 	waitchan := make(chan int, util.MaxGoroutines)
 	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
-	for _, c := range sp.cells {
+	for _, c := range sp.Cells {
 		if c.zmin <= frame && frame < c.zmax {
 			_ = <-waitchan
-			go func(c *cell) {
+			go func(c *Cell) {
 				for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
 					for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 						img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4+1] = uint8(c.c >> 8)
@@ -499,15 +438,15 @@ func (sp *splitmap) ToG(img *image.RGBA, frame int) {
 	return
 }
 
-func (sp *splitmap) ToB(img *image.RGBA, frame int) {
+func (sp *Map) ToB(img *image.RGBA, frame int) {
 	waitchan := make(chan int, util.MaxGoroutines)
 	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
-	for _, c := range sp.cells {
+	for _, c := range sp.Cells {
 		if c.zmin <= frame && frame < c.zmax {
 			_ = <-waitchan
-			go func(c *cell) {
+			go func(c *Cell) {
 				for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
 					for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 						img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4+2] = uint8(c.c >> 8)
@@ -524,15 +463,15 @@ func (sp *splitmap) ToB(img *image.RGBA, frame int) {
 	return
 }
 
-func (sp *splitmap) ToA(img *image.RGBA, frame int) {
+func (sp *Map) ToA(img *image.RGBA, frame int) {
 	waitchan := make(chan int, util.MaxGoroutines)
 	for i := 0; i < util.MaxGoroutines; i++ {
 		waitchan <- 1
 	}
-	for _, c := range sp.cells {
+	for _, c := range sp.Cells {
 		if c.zmin <= frame && frame < c.zmax {
 			_ = <-waitchan
-			go func(c *cell) {
+			go func(c *Cell) {
 				for y := c.Rect.Min.Y; y < c.Rect.Max.Y; y++ {
 					for x := c.Rect.Min.X; x < c.Rect.Max.X; x++ {
 						img.Pix[(y-img.Rect.Min.Y)*img.Stride+(x-img.Rect.Min.X)*4+3] = uint8(c.c >> 8)
@@ -550,22 +489,22 @@ func (sp *splitmap) ToA(img *image.RGBA, frame int) {
 }
 
 // A rectangle in in a Cellstream
-type streamcell struct {
+type StreamCell struct {
 	Z    int
 	Rect image.Rectangle
 	c    uint16
 }
 
-// A way to save a stream of cells. We only need to save zmin, because the bottom of the cube will
+// A way to save a stream of Cells. We only need to save zmin, because the bottom of the cube will
 // be written over by the next cube anyway (similarly, when drawing these cubes only the part that
 // changes needs redrawing).
-type cellstream struct {
-	stream []*streamcell
+type Cellstream struct {
+	stream []*StreamCell
 }
 
-func (cs *cellstream) Append(c *cell) {
+func (cs *Cellstream) Append(c *Cell) {
 	c.CalcC()
-	sc := &streamcell{
+	sc := &StreamCell{
 		Z:    c.zmin,
 		Rect: c.Rect,
 		c:    c.c,
@@ -574,25 +513,25 @@ func (cs *cellstream) Append(c *cell) {
 	return
 }
 
-func cellstreamFrom(sp *splitmap) (cs *cellstream) {
-	cs = new(cellstream)
-	cs.stream = make([]*streamcell, 0, len(sp.cells))
-	for _, c := range sp.cells {
+func CellstreamFrom(sp *Map) (cs *Cellstream) {
+	cs = new(Cellstream)
+	cs.stream = make([]*StreamCell, 0, len(sp.Cells))
+	for _, c := range sp.Cells {
 		cs.Append(c)
 	}
 	sort.Sort(cs)
 	return
 }
 
-func (cs *cellstream) Len() int {
+func (cs *Cellstream) Len() int {
 	return len(cs.stream)
 }
 
-func (cs *cellstream) Less(i, j int) bool {
+func (cs *Cellstream) Less(i, j int) bool {
 	return cs.stream[i].Z < cs.stream[j].Z
 }
 
-func (cs *cellstream) Swap(i, j int) {
+func (cs *Cellstream) Swap(i, j int) {
 	cs.stream[i], cs.stream[j] = cs.stream[j], cs.stream[i]
 	return
 }

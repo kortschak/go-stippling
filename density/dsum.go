@@ -106,15 +106,13 @@ func (ds *DSum) FindCx(r image.Rectangle) int {
 			}
 		} else {
 			// Round down to whichever side differs the least from total mass
-			// Note that lmass and rmass are guaranteed to be smaller than total mass
+			// Since both are rounded down, that means the biggest of the two.
 			cxymin := ds.ValueAt(xmin, r.Min.Y)
 			cxymax := ds.ValueAt(xmin, r.Max.Y)
 			lmass := cxymax - cxymin - xminymax + xminymin
 			cxymin = ds.ValueAt(xmax, r.Min.Y)
 			cxymax = ds.ValueAt(xmax, r.Max.Y)
 			rmass := xmaxymax - cxymax - xmaxymin + cxymin
-			//			tmass := (xmaxymaxzmax - xmaxyminzmax - xminymaxzmax + xminyminzmax) -
-			//				(xmaxymaxzmin - xmaxyminzmin - xminymaxzmin + xminyminzmin)
 			if lmass > rmass {
 				x = xmin
 			} else {
@@ -155,15 +153,13 @@ func (ds *DSum) FindCy(r image.Rectangle) int {
 			}
 		} else {
 			// Round down to whichever side differs the least from total mass
-			// Note that lmass and rmass are guaranteed to be smaller than total mass
+			// Since both are rounded down, that means the biggest of the two.
 			xmincy := ds.ValueAt(r.Min.X, ymin)
 			xmaxcy := ds.ValueAt(r.Max.X, ymin)
 			tmass := xmaxcy - xmincy - xmaxymin + xminymin
 			xmincy = ds.ValueAt(r.Min.X, ymax)
 			xmaxcy = ds.ValueAt(r.Max.X, ymax)
 			dmass := xmaxymax - xminymax - xmaxcy + xmincy
-			//			tmass := (xmaxymaxzmax - xmaxyminzmax - xminymaxzmax + xminyminzmax) -
-			//				(xmaxymaxzmin - xmaxyminzmin - xminymaxzmin + xminyminzmin)
 			if tmass > dmass {
 				y = ymin
 			} else {
@@ -204,15 +200,13 @@ func (ds *DSum) FindNegCx(r image.Rectangle) int {
 			}
 		} else {
 			// Round down to whichever side differs the least from total mass
-			// Note that lmass and rmass are guaranteed to be smaller than total mass
+			// Since both are rounded down, that means the biggest of the two.
 			cxymin := ds.NegValueAt(xmin, r.Min.Y)
 			cxymax := ds.NegValueAt(xmin, r.Max.Y)
 			lmass := cxymax - cxymin - xminymax + xminymin
 			cxymin = ds.NegValueAt(xmax, r.Min.Y)
 			cxymax = ds.NegValueAt(xmax, r.Max.Y)
 			rmass := xmaxymax - cxymax - xmaxymin + cxymin
-			//			tmass := (xmaxymaxzmax - xmaxyminzmax - xminymaxzmax + xminyminzmax) -
-			//				(xmaxymaxzmin - xmaxyminzmin - xminymaxzmin + xminyminzmin)
 			if lmass > rmass {
 				x = xmin
 			} else {
@@ -253,15 +247,13 @@ func (ds *DSum) FindNegCy(r image.Rectangle) int {
 			}
 		} else {
 			// Round down to whichever side differs the least from total mass
-			// Note that lmass and rmass are guaranteed to be smaller than total mass
+			// Since both are rounded down, that means the biggest of the two.
 			xmincy := ds.NegValueAt(r.Min.X, ymin)
 			xmaxcy := ds.NegValueAt(r.Max.X, ymin)
 			tmass := xmaxcy - xmincy - xmaxymin + xminymin
 			xmincy = ds.NegValueAt(r.Min.X, ymax)
 			xmaxcy = ds.NegValueAt(r.Max.X, ymax)
 			dmass := xmaxymax - xminymax - xmaxcy + xmincy
-			//			tmass := (xmaxymaxzmax - xmaxyminzmax - xminymaxzmax + xminyminzmax) -
-			//				(xmaxymaxzmin - xmaxyminzmin - xminymaxzmin + xminyminzmin)
 			if tmass > dmass {
 				y = ymin
 			} else {
@@ -275,7 +267,7 @@ func (ds *DSum) FindNegCy(r image.Rectangle) int {
 
 // Note that when you set a value at (x,y), the entire
 // area covered from (x,y) to the bottom right has to
-// be updated. In other words: very slow operation
+// be updated. In other words: very slow operation.
 func (d *DSum) Set(x, y int, v uint16) {
 	if !(image.Point{x, y}.In(d.Rect)) {
 		return

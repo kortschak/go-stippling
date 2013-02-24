@@ -88,7 +88,6 @@ func Init() {
 	Xweight = intgr.Max(0, *xweight)
 	Yweight = intgr.Max(0, *yweight)
 	Zweight = intgr.Max(0, *zweight)
-	NumCores = *numCores
 	Mono = *mono
 	if *maxGoroutines > 0 {
 		MaxGoroutines = *maxGoroutines
@@ -96,10 +95,12 @@ func Init() {
 		MaxGoroutines = 1
 	}
 	if *numCores <= 0 || *numCores > runtime.NumCPU() {
-		runtime.GOMAXPROCS(runtime.NumCPU())
+		NumCores = runtime.NumCPU()
 	} else {
-		runtime.GOMAXPROCS(*numCores)
+		NumCores = *numCores
 	}
+	runtime.GOMAXPROCS(NumCores)
+
 }
 
 func ListFiles() []string {
