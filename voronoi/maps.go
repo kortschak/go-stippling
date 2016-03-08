@@ -1,7 +1,7 @@
 package voronoi
 
 import (
-	"code.google.com/p/go-stippling/density"
+	"github.com/kortschak/go-stippling/density"
 )
 
 type maps struct {

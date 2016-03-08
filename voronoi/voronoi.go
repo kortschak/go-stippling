@@ -1,7 +1,7 @@
 package voronoi
 
 import (
-	"code.google.com/p/go-stippling/density"
+	"github.com/kortschak/go-stippling/density"
 	"image"
 )
 
@@ -9,7 +9,7 @@ import (
 // with the fractional part being 10 bits - 1024 by 1024 subpixel
 // precision should be enough for most intents and purposes.
 //
-// Note that summing over an area gives a total of (2^10)*(2^10) 
+// Note that summing over an area gives a total of (2^10)*(2^10)
 // subpixels, in other words: the mass' fraction can have up to
 // 20 bit "precision" if necessary.
 type Point struct {

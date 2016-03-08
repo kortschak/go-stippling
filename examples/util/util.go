@@ -4,8 +4,8 @@
 package util
 
 import (
-	"code.google.com/p/intmath/intgr"
 	"flag"
+	"github.com/thomaso-mirodin/intmath/intgr"
 	"image"
 	"image/jpeg"
 	"image/png"
