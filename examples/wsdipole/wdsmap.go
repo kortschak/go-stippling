@@ -5,11 +5,9 @@
 package main
 
 import (
-	"code.google.com/p/go-stippling/density"
+	"github.com/kortschak/go-stippling/density"
 	"image"
-	//"image/color"
 	"math"
-	//"runtime"
 )
 
 type dipole struct {

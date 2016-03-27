@@ -9,8 +9,8 @@
 package main
 
 import (
-	"code.google.com/p/go-stippling/density"
 	"flag"
+	"github.com/kortschak/go-stippling/density"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -19,7 +19,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	//"strings"
 )
 
 func main() {

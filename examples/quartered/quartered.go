@@ -3,9 +3,8 @@
 package main
 
 import (
-	"code.google.com/p/go-stippling/density"
 	"flag"
-	//"fmt"
+	"github.com/kortschak/go-stippling/density"
 	"image"
 	"image/jpeg"
 	"image/png"

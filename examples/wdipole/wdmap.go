@@ -5,12 +5,10 @@ package main
 // of regular ones.
 
 import (
-	"code.google.com/p/go-stippling/density"
-	//"fmt"
+	"github.com/kortschak/go-stippling/density"
 	"image"
 	"image/color"
 	"math"
-	//"runtime"
 )
 
 type cell struct {

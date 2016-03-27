@@ -14,8 +14,7 @@ package main
 // positive map covered by the cell.
 
 import (
-	"code.google.com/p/go-stippling/density"
-	//"fmt"
+	"github.com/kortschak/go-stippling/density"
 	"image"
 	"image/color"
 	"math"

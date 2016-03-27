@@ -1,9 +1,9 @@
 package main
 
 import (
-	"code.google.com/p/go-stippling/density"
-	"code.google.com/p/go-stippling/examples/util"
-	"code.google.com/p/intmath/intgr"
+	"github.com/kortschak/go-stippling/density"
+	"github.com/kortschak/go-stippling/examples/util"
+	"github.com/thomaso-mirodin/intmath/intgr"
 	"image"
 )
 

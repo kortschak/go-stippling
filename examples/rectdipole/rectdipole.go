@@ -6,10 +6,9 @@
 package main
 
 import (
-	"code.google.com/p/go-stippling/density"
-	"code.google.com/p/intmath/intgr"
 	"flag"
-	//"fmt"
+	"github.com/kortschak/go-stippling/density"
+	"github.com/thomaso-mirodin/intmath/intgr"
 	"image"
 	"image/jpeg"
 	"image/png"
